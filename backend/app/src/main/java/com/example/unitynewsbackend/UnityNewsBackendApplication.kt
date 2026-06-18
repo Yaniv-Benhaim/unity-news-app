@@ -27,10 +27,13 @@ object BackendRuntime {
     val requestLogStore = RequestLogStore()
     val filterArticlesUseCase = FilterArticlesUseCase()
     val getFilterSpecsUseCase = GetFilterSpecsUseCase()
-    val callerValidator = CallerValidator()
 
     private val _foregroundServiceRunning = MutableStateFlow(false)
     val foregroundServiceRunning: StateFlow<Boolean> = _foregroundServiceRunning.asStateFlow()
+
+    val callerValidator: CallerValidator by lazy {
+        CallerValidator(applicationContext)
+    }
 
     val repository: ArticleRepository by lazy {
         AssetArticleRepository(applicationContext)
