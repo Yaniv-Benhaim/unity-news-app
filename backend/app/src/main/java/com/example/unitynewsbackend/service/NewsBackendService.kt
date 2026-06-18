@@ -4,11 +4,14 @@ import android.app.Service
 import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
+import android.os.RemoteException
 import android.os.SystemClock
+import android.util.Log
 import com.example.unitynewsbackend.BackendRuntime
 import com.unitynews.contract.ArticleDto
 import com.unitynews.contract.ArticleFilterRequest
 import com.unitynews.contract.BackendStatusDto
+import com.unitynews.contract.FilterSpecDto
 import com.unitynews.contract.IArticlesCallback
 import com.unitynews.contract.IBackendStatusCallback
 import com.unitynews.contract.IFilterSpecsCallback
@@ -33,14 +36,23 @@ class NewsBackendService : Service() {
         override fun getFilterSpecs(callback: IFilterSpecsCallback) {
             val callingUid = Binder.getCallingUid()
             serviceScope.launch {
-                if (!validateCaller(callingUid, callback::onError)) return@launch
+                if (!validateCaller(callingUid)) {
+                    safeFilterSpecsError(callback, "UNAUTHORIZED", "Caller is not authorized")
+                    return@launch
+                }
 
                 runCatching {
                     val articles = BackendRuntime.repository.getArticles()
                     BackendRuntime.getFilterSpecsUseCase(articles).map { it.toDto() }
-                }.onSuccess(callback::onSuccess)
+                }.onSuccess { specs ->
+                    safeFilterSpecsSuccess(callback, specs)
+                }
                     .onFailure { error ->
-                        callback.onError("SERVER_ERROR", error.message ?: "Unable to load filters")
+                        safeFilterSpecsError(
+                            callback,
+                            "SERVER_ERROR",
+                            error.message ?: "Unable to load filters",
+                        )
                     }
             }
         }
@@ -53,25 +65,62 @@ class NewsBackendService : Service() {
                 val criteria = request.toCriteria()
                 val requestLabel = "request=${request.requestId.ifBlank { "unlabeled" }}"
 
-                if (!validateCaller(callingUid, callback::onError)) {
-                    logArticlesRequest(requestLabel, criteria, scenario, "UNAUTHORIZED", startedAt)
+                if (!validateCaller(callingUid)) {
+                    val callbackSent = safeArticleError(
+                        callback,
+                        "UNAUTHORIZED",
+                        "Caller is not authorized",
+                    )
+                    logArticlesRequest(
+                        requestLabel,
+                        criteria,
+                        scenario,
+                        articleLogResult("UNAUTHORIZED", callbackSent),
+                        startedAt,
+                    )
                     return@launch
                 }
 
                 when (scenario) {
                     ServerScenario.Unauthorized -> {
-                        callback.onError("UNAUTHORIZED", "Caller is not authorized")
-                        logArticlesRequest(requestLabel, criteria, scenario, "UNAUTHORIZED", startedAt)
+                        val callbackSent = safeArticleError(
+                            callback,
+                            "UNAUTHORIZED",
+                            "Caller is not authorized",
+                        )
+                        logArticlesRequest(
+                            requestLabel,
+                            criteria,
+                            scenario,
+                            articleLogResult("UNAUTHORIZED", callbackSent),
+                            startedAt,
+                        )
                     }
 
                     ServerScenario.ServerError -> {
-                        callback.onError("SERVER_ERROR", "Scenario forced a server error")
-                        logArticlesRequest(requestLabel, criteria, scenario, "SERVER_ERROR", startedAt)
+                        val callbackSent = safeArticleError(
+                            callback,
+                            "SERVER_ERROR",
+                            "Scenario forced a server error",
+                        )
+                        logArticlesRequest(
+                            requestLabel,
+                            criteria,
+                            scenario,
+                            articleLogResult("SERVER_ERROR", callbackSent),
+                            startedAt,
+                        )
                     }
 
                     ServerScenario.Empty -> {
-                        callback.onSuccess(emptyList())
-                        logArticlesRequest(requestLabel, criteria, scenario, "0 articles", startedAt)
+                        val callbackSent = safeArticleSuccess(callback, emptyList())
+                        logArticlesRequest(
+                            requestLabel,
+                            criteria,
+                            scenario,
+                            articleLogResult("0 articles", callbackSent),
+                            startedAt,
+                        )
                     }
 
                     ServerScenario.Slow -> {
@@ -89,7 +138,10 @@ class NewsBackendService : Service() {
         override fun getBackendStatus(callback: IBackendStatusCallback) {
             val callingUid = Binder.getCallingUid()
             serviceScope.launch {
-                if (!validateCaller(callingUid, callback::onError)) return@launch
+                if (!validateCaller(callingUid)) {
+                    safeStatusError(callback, "UNAUTHORIZED", "Caller is not authorized")
+                    return@launch
+                }
 
                 runCatching {
                     BackendStatusDto(
@@ -97,9 +149,15 @@ class NewsBackendService : Service() {
                         scenario = BackendRuntime.scenarioController.scenario.value.name,
                         articleCount = BackendRuntime.repository.getArticles().size,
                     )
-                }.onSuccess(callback::onSuccess)
+                }.onSuccess { status ->
+                    safeStatusSuccess(callback, status)
+                }
                     .onFailure { error ->
-                        callback.onError("SERVER_ERROR", error.message ?: "Unable to load status")
+                        safeStatusError(
+                            callback,
+                            "SERVER_ERROR",
+                            error.message ?: "Unable to load status",
+                        )
                     }
             }
         }
@@ -123,11 +181,27 @@ class NewsBackendService : Service() {
             val articles = BackendRuntime.repository.getArticles()
             BackendRuntime.filterArticlesUseCase(articles, criteria).map { it.toDto() }
         }.onSuccess { articles ->
-            callback.onSuccess(articles)
-            logArticlesRequest(requestLabel, criteria, scenario, "${articles.size} articles", startedAt)
+            val callbackSent = safeArticleSuccess(callback, articles)
+            logArticlesRequest(
+                requestLabel,
+                criteria,
+                scenario,
+                articleLogResult("${articles.size} articles", callbackSent),
+                startedAt,
+            )
         }.onFailure { error ->
-            callback.onError("SERVER_ERROR", error.message ?: "Unable to load articles")
-            logArticlesRequest(requestLabel, criteria, scenario, "SERVER_ERROR", startedAt)
+            val callbackSent = safeArticleError(
+                callback,
+                "SERVER_ERROR",
+                error.message ?: "Unable to load articles",
+            )
+            logArticlesRequest(
+                requestLabel,
+                criteria,
+                scenario,
+                articleLogResult("SERVER_ERROR", callbackSent),
+                startedAt,
+            )
         }
     }
 
@@ -144,16 +218,50 @@ class NewsBackendService : Service() {
         )
     }
 
-    private fun validateCaller(
-        callingUid: Int,
-        onError: (String, String) -> Unit,
-    ): Boolean {
-        val isValid = BackendRuntime.callerValidator.validate(callingUid)
-        if (!isValid) {
-            onError("UNAUTHORIZED", "Caller is not authorized")
+    private fun safeArticleSuccess(callback: IArticlesCallback, articles: List<ArticleDto>): Boolean =
+        runCallback("articles success") {
+            callback.onSuccess(articles)
         }
-        return isValid
-    }
+
+    private fun safeArticleError(callback: IArticlesCallback, code: String, message: String): Boolean =
+        runCallback("articles error $code") {
+            callback.onError(code, message)
+        }
+
+    private fun safeFilterSpecsSuccess(callback: IFilterSpecsCallback, specs: List<FilterSpecDto>): Boolean =
+        runCallback("filter specs success") {
+            callback.onSuccess(specs)
+        }
+
+    private fun safeFilterSpecsError(callback: IFilterSpecsCallback, code: String, message: String): Boolean =
+        runCallback("filter specs error $code") {
+            callback.onError(code, message)
+        }
+
+    private fun safeStatusSuccess(callback: IBackendStatusCallback, status: BackendStatusDto): Boolean =
+        runCallback("status success") {
+            callback.onSuccess(status)
+        }
+
+    private fun safeStatusError(callback: IBackendStatusCallback, code: String, message: String): Boolean =
+        runCallback("status error $code") {
+            callback.onError(code, message)
+        }
+
+    private fun runCallback(label: String, send: () -> Unit): Boolean =
+        try {
+            send()
+            true
+        } catch (error: RemoteException) {
+            Log.w(TAG, "Failed to send $label callback", error)
+            false
+        }
+
+    private fun articleLogResult(result: String, callbackSent: Boolean): String =
+        if (callbackSent) result else "$result callback=REMOTE_EXCEPTION"
+
+    private fun validateCaller(callingUid: Int): Boolean =
+        BackendRuntime.callerValidator.validate(callingUid)
 
     private fun ArticleFilterRequest.toCriteria(): FilterCriteria =
         FilterCriteria(
@@ -173,8 +281,8 @@ class NewsBackendService : Service() {
             placeholderBlue = placeholderBlue,
         )
 
-    private fun FilterSpec.toDto(): com.unitynews.contract.FilterSpecDto =
-        com.unitynews.contract.FilterSpecDto(
+    private fun FilterSpec.toDto(): FilterSpecDto =
+        FilterSpecDto(
             key = key,
             label = label,
             type = type.name,
@@ -185,6 +293,7 @@ class NewsBackendService : Service() {
         "title=${titleQuery?.takeIf { it.isNotBlank() } ?: "*"},ratings=${ratingValues.sorted().ifEmpty { listOf("*") }}"
 
     private companion object {
+        const val TAG = "NewsBackendService"
         const val API_VERSION = 1
         const val SLOW_SCENARIO_DELAY_MS = 800L
     }

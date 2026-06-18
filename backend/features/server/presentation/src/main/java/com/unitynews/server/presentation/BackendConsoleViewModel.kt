@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class BackendConsoleViewModel(
     private val scenarioController: ScenarioController,
@@ -60,12 +61,19 @@ class BackendConsoleViewModel(
     fun refreshStatus() {
         scope.launch {
             isRefreshing.value = true
-            runCatching { articleCountProvider() }
-                .onSuccess { count -> articleCount.value = count }
-                .onFailure { error ->
+            try {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        articleCountProvider()
+                    }
+                }.onSuccess { count ->
+                    articleCount.value = count
+                }.onFailure { error ->
                     requestLogStore.add("console refresh failed: ${error.message ?: "unknown error"}")
                 }
-            isRefreshing.value = false
+            } finally {
+                isRefreshing.value = false
+            }
         }
     }
 
