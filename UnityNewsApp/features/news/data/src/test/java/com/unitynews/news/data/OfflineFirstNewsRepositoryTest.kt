@@ -198,6 +198,23 @@ class OfflineFirstNewsRepositoryTest {
         }
     }
 
+    @Test
+    fun `refresh rethrows cancellation returned by remote and does not mark stale`() = runTest {
+        val expected = CancellationException("remote cancelled")
+        val criteria = FilterCriteria(titleQuery = "cancel")
+        val local = InMemoryNewsLocalDataSource()
+        val remote = FakeRemoteArticleDataSource(articleResult = Result.failure(expected))
+        val repository = OfflineFirstNewsRepository(local, remote)
+
+        try {
+            repository.refresh(criteria)
+            fail("Expected CancellationException")
+        } catch (error: CancellationException) {
+            assertSame(expected, error)
+        }
+        assertEquals(null, local.staleReason(criteria))
+    }
+
     private fun article(
         id: String,
         title: String,

@@ -20,6 +20,7 @@ import com.unitynews.server.domain.model.Article
 import com.unitynews.server.domain.model.FilterCriteria
 import com.unitynews.server.domain.model.FilterSpec
 import com.unitynews.server.domain.model.ServerScenario
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,7 +42,7 @@ class NewsBackendService : Service() {
                     return@launch
                 }
 
-                runCatching {
+                resultPreservingCancellation {
                     val articles = BackendRuntime.repository.getArticles()
                     BackendRuntime.getFilterSpecsUseCase(articles).map { it.toDto() }
                 }.onSuccess { specs ->
@@ -143,7 +144,7 @@ class NewsBackendService : Service() {
                     return@launch
                 }
 
-                runCatching {
+                resultPreservingCancellation {
                     BackendStatusDto(
                         isRunning = true,
                         scenario = BackendRuntime.scenarioController.scenario.value.name,
@@ -177,7 +178,7 @@ class NewsBackendService : Service() {
         scenario: ServerScenario,
         startedAt: Long,
     ) {
-        runCatching {
+        resultPreservingCancellation {
             val articles = BackendRuntime.repository.getArticles()
             BackendRuntime.filterArticlesUseCase(articles, criteria).map { it.toDto() }
         }.onSuccess { articles ->
@@ -257,6 +258,15 @@ class NewsBackendService : Service() {
             false
         }
 
+    private suspend fun <T> resultPreservingCancellation(block: suspend () -> T): Result<T> =
+        try {
+            Result.success(block())
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            Result.failure(error)
+        }
+
     private fun articleLogResult(result: String, callbackSent: Boolean): String =
         if (callbackSent) result else "$result callback=REMOTE_EXCEPTION"
 
@@ -295,7 +305,7 @@ class NewsBackendService : Service() {
 
     private companion object {
         const val TAG = "NewsBackendService"
-        const val API_VERSION = 1
+        const val API_VERSION = 2
         const val SLOW_SCENARIO_DELAY_MS = 800L
     }
 }

@@ -1487,7 +1487,7 @@ class AidlArticleDataSource(
 ) : RemoteArticleDataSource {
     override suspend fun getArticles(criteria: FilterCriteria): Result<List<Article>> {
         val service = backend()
-        if (service.apiVersion != 1) return Result.failure(IllegalStateException("Unsupported backend version"))
+        if (service.apiVersion != 2) return Result.failure(IllegalStateException("Unsupported backend version"))
         return suspendCancellableCoroutine { continuation ->
             service.getArticles(criteria.toRequest(), object : IArticlesCallback.Stub() {
                 override fun onSuccess(articles: MutableList<com.unitynews.contract.ArticleDto>) {

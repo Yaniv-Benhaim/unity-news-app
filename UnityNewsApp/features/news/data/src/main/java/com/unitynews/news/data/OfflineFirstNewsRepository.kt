@@ -20,6 +20,9 @@ class OfflineFirstNewsRepository(
                 resultPreservingCancellation { local.replace(criteria, articles) }
             },
             onFailure = { error ->
+                if (error is CancellationException) {
+                    throw error
+                }
                 resultPreservingCancellation {
                     local.markStale(criteria, error.message ?: "Remote refresh failed")
                 }
