@@ -4,31 +4,36 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import androidx.activity.viewModels
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.example.unitynewsapp.ui.theme.UnityNewsAppTheme
-import com.unitynews.news.domain.model.FilterCriteria
 import com.unitynews.news.presentation.NewsScreen
-import com.unitynews.news.presentation.NewsUiState
+import com.unitynews.news.presentation.NewsViewModel
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private val viewModel: NewsViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             UnityNewsAppTheme {
+                val state by viewModel.state.collectAsState()
+                val criteria by viewModel.criteria.collectAsState()
+
                 NewsScreen(
-                    state = NewsUiState.BackendMissing(
-                        filters = emptyList(),
-                        isRefreshing = false,
-                        staleMessage = null,
-                    ),
-                    criteria = FilterCriteria(),
-                    onRefresh = {},
+                    state = state,
+                    criteria = criteria,
+                    onRefresh = viewModel::refresh,
                     onOpenBackendSetup = ::openBackendSetup,
-                    onTextFilterChanged = { _, _ -> },
-                    onMultiSelectFilterChanged = { _, _, _ -> },
+                    onTextFilterChanged = viewModel::updateTextFilter,
+                    onMultiSelectFilterChanged = viewModel::toggleMultiSelectFilter,
                 )
             }
         }

@@ -6,6 +6,8 @@ import com.unitynews.news.domain.model.Article
 import com.unitynews.news.domain.model.FilterCriteria
 import com.unitynews.news.domain.model.FilterSpec
 import com.unitynews.news.domain.repository.NewsRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,11 +21,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class NewsViewModel(
+@HiltViewModel
+class NewsViewModel @Inject constructor(
     private val repository: NewsRepository,
-    initialCriteria: FilterCriteria = FilterCriteria(),
 ) : ViewModel() {
-    private val mutableCriteria = MutableStateFlow(initialCriteria)
+    private val mutableCriteria = MutableStateFlow(FilterCriteria())
     val criteria: StateFlow<FilterCriteria> = mutableCriteria.asStateFlow()
 
     private val filters = MutableStateFlow<List<FilterSpec>>(emptyList())

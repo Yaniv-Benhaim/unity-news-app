@@ -176,6 +176,7 @@ ArticleDto
 ArticleFilterRequest
   titleQuery
   ratingValues
+  dynamicValues
   requestId
 
 FilterSpecDto
@@ -322,7 +323,7 @@ Fault modes are part of the backend runtime:
 | `Slow` | Delays callback | Loading/refreshing state remains stable |
 | `Empty` | Returns empty list | Empty state renders |
 | `ServerError` | Returns typed error | Cached content remains visible when available |
-| `Unauthorized` | Returns authorization failure | Unauthorized state renders |
+| `Unauthorized` | Returns authorization failure | Error state renders with the typed authorization message |
 
 These modes make resilience visible during a design review and are covered by tests.
 
@@ -335,12 +336,9 @@ The UI app is a focused news reader. It does not include article details, accoun
 ```mermaid
 flowchart TD
     Screen["NewsScreen"] --> VM["NewsViewModel"]
-    VM --> Observe["ObserveArticlesUseCase"]
-    VM --> Refresh["RefreshArticlesUseCase"]
-    VM --> Apply["ApplyFiltersUseCase"]
-    Observe --> Repo["NewsRepository"]
-    Refresh --> Repo
-    Apply --> Repo
+    VM --> Criteria["FilterCriteria StateFlow"]
+    VM --> Repo["NewsRepository"]
+    Criteria --> Repo
     Repo --> Room["Room Cache"]
     Repo --> Remote["RemoteArticleDataSource"]
     Remote --> AIDL["AidlArticleDataSource"]
@@ -357,17 +355,16 @@ features/news/domain
   NewsRepository
   ObserveArticlesUseCase
   RefreshArticlesUseCase
-  ApplyFiltersUseCase
 
 features/news/data
   OfflineFirstNewsRepository
-  RoomArticleLocalDataSource
+  RoomNewsLocalDataSource
   RemoteArticleDataSource
   AidlArticleDataSource
+  BackendConnection
+  BackendAvailabilityChecker
   ArticleEntity
   CachedQueryEntity
-  CacheMetadataEntity
-  mappers
 
 features/news/presentation
   NewsViewModel
@@ -435,11 +432,6 @@ CachedQueryEntity
   articleIds
   lastSuccessfulRefreshAt
   staleReason
-
-CacheMetadataEntity
-  key
-  value
-  updatedAt
 ```
 
 The cache is keyed by criteria hash so the app can show the last successful result for an applied filter set when the backend is unavailable.
@@ -455,7 +447,7 @@ Initial filter specs:
 | `title` | text | static backend filter definition |
 | `rating` | select/multi-select | values derived from bundled dataset |
 
-Adding a new filter later requires backend support for the filter and a UI control renderer for the declared type. It does not require rewriting the screen, ViewModel, or repository contracts.
+The IPC contract carries extra filter values in `ArticleFilterRequest.dynamicValues`, and the domain model mirrors that with `FilterCriteria.dynamicValues`. Adding a new text or multi-select filter later requires backend support for the filter and a declared `FilterSpec`; the existing screen, ViewModel, repository contract, and AIDL DTO shape do not need a structural change.
 
 Unsupported filter types are shown as unavailable instead of crashing the UI.
 
@@ -467,10 +459,10 @@ If the UI app cannot detect or bind to the backend app, it shows a setup screen.
 flowchart TD
     Start["UI app starts"] --> Detect{"Backend package installed?"}
     Detect -- "No" --> Setup["Show setup screen"]
-    Setup --> Install["Open Android package installer"]
-    Install --> Approved{"User approves install?"}
-    Approved -- "No" --> Manual["Show manual install guidance"]
-    Approved -- "Yes" --> Launch["Launch backend console"]
+    Setup --> Install["Open Android system installer or package listing"]
+    Install --> Approved{"User completes install?"}
+    Approved -- "No" --> Setup
+    Approved -- "Yes" --> Launch["Open backend console"]
     Detect -- "Yes" --> Bind{"Can bind to service?"}
     Launch --> StartService["User starts backend service"]
     StartService --> Retry["Retry connection"]
@@ -489,16 +481,11 @@ The UI exposes explicit states:
 
 - `InitialLoading`
 - `Content`
-- `RefreshingWithContent`
 - `Empty`
-- `StaleContent`
 - `BackendMissing`
-- `BackendUnavailable`
-- `Unauthorized`
-- `IncompatibleBackend`
-- `FatalError`
+- `Error`
 
-Backend errors are typed at the IPC boundary and mapped into domain/presentation states.
+Refreshing and stale-cache indicators are carried as fields on content, empty, backend-missing, and error states. Backend errors are typed at the IPC boundary and converted into user-facing messages without changing the domain or presentation contract.
 
 ## Testing Strategy
 
@@ -522,6 +509,7 @@ Backend errors are typed at the IPC boundary and mapped into domain/presentation
 - Updates stale metadata.
 - Caches filtered results by criteria hash.
 - Maps unsupported backend version to domain error.
+- Carries dynamic filter values through IPC and cache keys.
 - Swaps fake remote data source without changing domain tests.
 
 ### UI Presentation Tests
@@ -529,7 +517,8 @@ Backend errors are typed at the IPC boundary and mapped into domain/presentation
 - Maps filter specs to UI controls.
 - Builds expected criteria from user input.
 - Applies filters through the ViewModel.
-- Emits loading, content, empty, stale, backend missing, unauthorized, and incompatible states.
+- Emits loading, content, empty, backend missing, and error states.
+- Preserves stale-cache messaging while content remains visible.
 - Routes backend missing state to setup flow.
 
 ### Contract Tests

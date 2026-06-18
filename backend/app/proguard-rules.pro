@@ -19,3 +19,9 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep the duplicated IPC DTO parcelable surface stable for Binder.
+-keep class com.unitynews.contract.** implements android.os.Parcelable { *; }
+-keepclassmembers class com.unitynews.contract.** {
+    public static final android.os.Parcelable$Creator CREATOR;
+}
