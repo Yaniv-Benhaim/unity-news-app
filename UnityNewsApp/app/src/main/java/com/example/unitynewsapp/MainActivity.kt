@@ -1,17 +1,16 @@
 package com.example.unitynewsapp
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import com.example.unitynewsapp.ui.theme.UnityNewsAppTheme
+import com.unitynews.news.domain.model.FilterCriteria
+import com.unitynews.news.presentation.NewsScreen
+import com.unitynews.news.presentation.NewsUiState
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -19,29 +18,32 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             UnityNewsAppTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                NewsScreen(
+                    state = NewsUiState.BackendMissing,
+                    criteria = FilterCriteria(),
+                    onRefresh = {},
+                    onOpenBackendSetup = ::openBackendSetup,
+                    onTextFilterChanged = { _, _ -> },
+                    onMultiSelectFilterChanged = { _, _, _ -> },
+                )
             }
         }
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    UnityNewsAppTheme {
-        Greeting("Android")
+    private fun openBackendSetup() {
+        val packageName = "com.example.unitynewsbackend"
+        val marketIntent = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse("market://details?id=$packageName"),
+        )
+        val webIntent = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse("https://play.google.com/store/apps/details?id=$packageName"),
+        )
+        try {
+            startActivity(marketIntent)
+        } catch (_: ActivityNotFoundException) {
+            startActivity(webIntent)
+        }
     }
 }
