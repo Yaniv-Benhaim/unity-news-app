@@ -2,6 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="com.unitynews.backend.permission.ACCESS_NEWS_BACKEND" />
+
+    <queries>
+        <package android:name="com.example.unitynewsbackend" />
+
+        <intent>
+            <action android:name="com.unitynews.contract.INewsBackendService" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
