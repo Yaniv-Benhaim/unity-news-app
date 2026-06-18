@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 fun BackendSetupScreen(
     onOpenBackendSetup: () -> Unit,
     modifier: Modifier = Modifier,
+    isRefreshing: Boolean = false,
     contentPadding: PaddingValues = PaddingValues(24.dp),
 ) {
     Column(
@@ -36,7 +37,11 @@ fun BackendSetupScreen(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Unity News reads articles from a companion backend app. Install or start the backend, then refresh the feed.",
+            text = if (isRefreshing) {
+                "Checking the companion backend..."
+            } else {
+                "Unity News reads articles from a companion backend app. Install or start the backend, then refresh the feed."
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

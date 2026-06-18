@@ -4,20 +4,38 @@ import com.unitynews.news.domain.model.Article
 import com.unitynews.news.domain.model.FilterSpec
 
 sealed interface NewsUiState {
+    val filters: List<FilterSpec>
+        get() = emptyList()
+    val isRefreshing: Boolean
+        get() = false
+    val staleMessage: String?
+        get() = null
+
     data object InitialLoading : NewsUiState
 
     data class Content(
         val articles: List<Article>,
-        val filters: List<FilterSpec>,
-        val isRefreshing: Boolean,
-        val staleMessage: String?,
+        override val filters: List<FilterSpec>,
+        override val isRefreshing: Boolean,
+        override val staleMessage: String?,
     ) : NewsUiState
 
-    data object Empty : NewsUiState
+    data class Empty(
+        override val filters: List<FilterSpec>,
+        override val isRefreshing: Boolean,
+        override val staleMessage: String?,
+    ) : NewsUiState
 
-    data object BackendMissing : NewsUiState
+    data class BackendMissing(
+        override val filters: List<FilterSpec>,
+        override val isRefreshing: Boolean,
+        override val staleMessage: String?,
+    ) : NewsUiState
 
     data class Error(
         val message: String,
+        override val filters: List<FilterSpec>,
+        override val isRefreshing: Boolean,
+        override val staleMessage: String?,
     ) : NewsUiState
 }

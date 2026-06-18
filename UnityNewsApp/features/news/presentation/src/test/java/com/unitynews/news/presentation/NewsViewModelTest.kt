@@ -7,6 +7,7 @@ import com.unitynews.news.domain.model.FilterType
 import com.unitynews.news.domain.repository.NewsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
@@ -187,6 +188,72 @@ class NewsViewModelTest {
         assertEquals(1, repository.refreshCalls)
     }
 
+    @Test
+    fun `late initial filter failure does not override newer refresh success`() = runTest {
+        val initialFilters = CompletableDeferred<Result<List<FilterSpec>>>()
+        val refreshedFilters = CompletableDeferred<Result<List<FilterSpec>>>()
+        val repository = FakeNewsRepository(
+            articles = MutableStateFlow(listOf(article(id = "1", title = "Cached"))),
+            filterSpecDeferredResults = ArrayDeque(listOf(initialFilters, refreshedFilters)),
+        )
+        val viewModel = NewsViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.refresh()
+        advanceUntilIdle()
+        refreshedFilters.complete(
+            Result.success(listOf(FilterSpec(key = "section", label = "Section", type = FilterType.MultiSelect))),
+        )
+        advanceUntilIdle()
+        initialFilters.complete(Result.failure(IllegalStateException("late backend missing")))
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertTrue(state is NewsUiState.Content)
+        state as NewsUiState.Content
+        assertEquals(listOf("Section"), state.filters.map { it.label })
+        assertNull(state.staleMessage)
+    }
+
+    @Test
+    fun `empty state retains filters for changing zero-result criteria`() = runTest {
+        val repository = FakeNewsRepository(
+            filterSpecsResult = Result.success(
+                listOf(FilterSpec(key = "section", label = "Section", type = FilterType.MultiSelect)),
+            ),
+        )
+
+        val viewModel = NewsViewModel(repository)
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertTrue(state is NewsUiState.Empty)
+        state as NewsUiState.Empty
+        assertEquals(listOf("Section"), state.filters.map { it.label })
+        assertEquals(false, state.isRefreshing)
+    }
+
+    @Test
+    fun `backend missing state exposes refresh progress during retry`() = runTest {
+        val refreshResult = CompletableDeferred<Result<Unit>>()
+        val repository = FakeNewsRepository(
+            filterSpecsResult = Result.failure(IllegalStateException("backend missing")),
+            refreshDeferredResult = refreshResult,
+        )
+        val viewModel = NewsViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertTrue(state is NewsUiState.BackendMissing)
+        state as NewsUiState.BackendMissing
+        assertEquals(true, state.isRefreshing)
+
+        refreshResult.complete(Result.success(Unit))
+    }
+
     private fun article(
         id: String,
         title: String,
@@ -219,7 +286,9 @@ private class FakeNewsRepository(
     private val articles: MutableStateFlow<List<Article>> = MutableStateFlow(emptyList()),
     private val filterSpecsResult: Result<List<FilterSpec>> = Result.success(emptyList()),
     private val filterSpecResults: ArrayDeque<Result<List<FilterSpec>>> = ArrayDeque(),
+    private val filterSpecDeferredResults: ArrayDeque<CompletableDeferred<Result<List<FilterSpec>>>> = ArrayDeque(),
     private val refreshResult: Result<Unit> = Result.success(Unit),
+    private val refreshDeferredResult: CompletableDeferred<Result<Unit>>? = null,
     private val refreshFailure: Throwable? = null,
     private val observeArticlesOverride: ((FilterCriteria) -> Flow<List<Article>>)? = null,
 ) : NewsRepository {
@@ -235,13 +304,13 @@ private class FakeNewsRepository(
     override suspend fun refresh(criteria: FilterCriteria): Result<Unit> {
         refreshCalls += 1
         refreshFailure?.let { throw it }
-        return refreshResult
+        return refreshDeferredResult?.await() ?: refreshResult
     }
 
     override suspend fun getFilterSpecs(): Result<List<FilterSpec>> =
-        if (filterSpecResults.isEmpty()) {
-            filterSpecsResult
-        } else {
-            filterSpecResults.removeFirst()
+        when {
+            filterSpecDeferredResults.isNotEmpty() -> filterSpecDeferredResults.removeFirst().await()
+            filterSpecResults.isNotEmpty() -> filterSpecResults.removeFirst()
+            else -> filterSpecsResult
         }
 }

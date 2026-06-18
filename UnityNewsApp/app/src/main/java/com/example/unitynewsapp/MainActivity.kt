@@ -19,7 +19,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             UnityNewsAppTheme {
                 NewsScreen(
-                    state = NewsUiState.BackendMissing,
+                    state = NewsUiState.BackendMissing(
+                        filters = emptyList(),
+                        isRefreshing = false,
+                        staleMessage = null,
+                    ),
                     criteria = FilterCriteria(),
                     onRefresh = {},
                     onOpenBackendSetup = ::openBackendSetup,

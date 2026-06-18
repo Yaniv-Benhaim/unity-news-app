@@ -50,7 +50,7 @@ fun NewsScreen(
     onMultiSelectFilterChanged: (key: String, option: String, selected: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isRefreshing = (state as? NewsUiState.Content)?.isRefreshing == true
+    val isRefreshing = state.isRefreshing
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -85,20 +85,25 @@ fun NewsScreen(
                     .padding(innerPadding),
             )
 
-            NewsUiState.Empty -> EmptyContent(
+            is NewsUiState.Empty -> EmptyContent(
+                state = state,
+                criteria = criteria,
                 onRefresh = onRefresh,
+                onTextFilterChanged = onTextFilterChanged,
+                onMultiSelectFilterChanged = onMultiSelectFilterChanged,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
             )
 
-            NewsUiState.BackendMissing -> BackendSetupScreen(
+            is NewsUiState.BackendMissing -> BackendSetupScreen(
                 onOpenBackendSetup = onOpenBackendSetup,
+                isRefreshing = state.isRefreshing,
                 modifier = Modifier.padding(innerPadding),
             )
 
             is NewsUiState.Error -> ErrorContent(
-                message = state.message,
+                state = state,
                 onRefresh = onRefresh,
                 modifier = Modifier
                     .fillMaxSize()
@@ -251,35 +256,55 @@ private fun LoadingContent(modifier: Modifier = Modifier) {
 
 @Composable
 private fun EmptyContent(
+    state: NewsUiState.Empty,
+    criteria: FilterCriteria,
     onRefresh: () -> Unit,
+    onTextFilterChanged: (key: String, value: String) -> Unit,
+    onMultiSelectFilterChanged: (key: String, option: String, selected: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.Start,
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = "No articles",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Try refreshing or changing the filters.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(20.dp))
-        Button(onClick = onRefresh) {
-            Text("Refresh")
+        item {
+            FilterControls(
+                filters = state.filters,
+                criteria = criteria,
+                onTextFilterChanged = onTextFilterChanged,
+                onMultiSelectFilterChanged = onMultiSelectFilterChanged,
+            )
+        }
+        item {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.Start,
+            ) {
+                Text(
+                    text = "No articles",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "Try refreshing or changing the filters.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = onRefresh,
+                    enabled = !state.isRefreshing,
+                ) {
+                    Text(if (state.isRefreshing) "Refreshing" else "Refresh")
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun ErrorContent(
-    message: String,
+    state: NewsUiState.Error,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -295,13 +320,16 @@ private fun ErrorContent(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = message,
+            text = state.message,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(20.dp))
-        Button(onClick = onRefresh) {
-            Text("Retry")
+        Button(
+            onClick = onRefresh,
+            enabled = !state.isRefreshing,
+        ) {
+            Text(if (state.isRefreshing) "Retrying" else "Retry")
         }
     }
 }

@@ -32,6 +32,7 @@ class NewsViewModel(
     private val backendMissing = MutableStateFlow(false)
     private val streamErrorMessage = MutableStateFlow<String?>(null)
     private val observeRevision = MutableStateFlow(0)
+    private var filterLoadGeneration = 0
 
     private val articles = combine(mutableCriteria, observeRevision) { criteria, _ -> criteria }
         .flatMapLatest { criteria ->
@@ -63,15 +64,28 @@ class NewsViewModel(
         streamErrorMessage,
     ) { snapshot, backendMissing, streamErrorMessage ->
         when {
-            streamErrorMessage != null -> NewsUiState.Error(streamErrorMessage)
+            streamErrorMessage != null -> NewsUiState.Error(
+                message = streamErrorMessage,
+                filters = snapshot.filters,
+                isRefreshing = snapshot.isRefreshing,
+                staleMessage = snapshot.staleMessage,
+            )
             snapshot.articles.isNotEmpty() -> NewsUiState.Content(
                 articles = snapshot.articles,
                 filters = snapshot.filters,
                 isRefreshing = snapshot.isRefreshing,
                 staleMessage = snapshot.staleMessage,
             )
-            backendMissing -> NewsUiState.BackendMissing
-            else -> NewsUiState.Empty
+            backendMissing -> NewsUiState.BackendMissing(
+                filters = snapshot.filters,
+                isRefreshing = snapshot.isRefreshing,
+                staleMessage = snapshot.staleMessage,
+            )
+            else -> NewsUiState.Empty(
+                filters = snapshot.filters,
+                isRefreshing = snapshot.isRefreshing,
+                staleMessage = snapshot.staleMessage,
+            )
         }
     }.stateIn(
         scope = viewModelScope,
@@ -139,8 +153,18 @@ class NewsViewModel(
     }
 
     private fun loadFilterSpecs() {
+        val generation = ++filterLoadGeneration
         viewModelScope.launch {
             repository.getFilterSpecs()
+                .takeIf { generation == filterLoadGeneration }
+                ?.let { result ->
+                    applyFilterSpecsResult(result)
+                }
+        }
+    }
+
+    private fun applyFilterSpecsResult(result: Result<List<FilterSpec>>) {
+        result
                 .onSuccess { specs ->
                     filters.value = specs
                     backendMissing.value = false
@@ -152,7 +176,6 @@ class NewsViewModel(
                     backendMissing.value = true
                     staleMessage.value = error.readableMessage("Install or start the Unity News backend")
                 }
-        }
     }
 }
 
