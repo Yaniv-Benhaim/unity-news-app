@@ -152,6 +152,7 @@ class NewsViewModel @Inject constructor(
             streamErrorMessage.value = null
             staleMessage.value = null
             mutableCriteria.value = nextCriteria
+            refresh()
         }
     }
 

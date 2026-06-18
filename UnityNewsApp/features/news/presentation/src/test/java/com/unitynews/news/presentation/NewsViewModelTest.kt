@@ -86,6 +86,23 @@ class NewsViewModelTest {
     }
 
     @Test
+    fun `criteria changes refresh articles for the selected filter`() = runTest {
+        val repository = FakeNewsRepository(
+            filterSpecsResult = Result.success(
+                listOf(FilterSpec(key = "rating", label = "Rating", type = FilterType.MultiSelect)),
+            ),
+        )
+        val viewModel = NewsViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.toggleMultiSelectFilter(key = "rating", option = "1", selected = true)
+        advanceUntilIdle()
+
+        assertEquals(2, repository.refreshCriteria.size)
+        assertEquals(setOf(1), repository.refreshCriteria.last().ratingValues)
+    }
+
+    @Test
     fun `unknown dynamic filter keys update dynamic criteria values`() = runTest {
         val repository = FakeNewsRepository(
             filterSpecsResult = Result.success(
@@ -298,6 +315,7 @@ private class FakeNewsRepository(
     private val observeArticlesOverride: ((FilterCriteria) -> Flow<List<Article>>)? = null,
 ) : NewsRepository {
     val observedCriteria = mutableListOf<FilterCriteria>()
+    val refreshCriteria = mutableListOf<FilterCriteria>()
     var refreshCalls = 0
         private set
 
@@ -308,6 +326,7 @@ private class FakeNewsRepository(
 
     override suspend fun refresh(criteria: FilterCriteria): Result<Unit> {
         refreshCalls += 1
+        refreshCriteria += criteria
         refreshFailure?.let { throw it }
         return refreshDeferredResult?.await() ?: refreshResult
     }
