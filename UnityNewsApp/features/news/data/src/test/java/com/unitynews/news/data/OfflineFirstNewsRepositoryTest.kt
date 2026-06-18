@@ -7,10 +7,12 @@ import com.unitynews.news.domain.model.FilterSpec
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class OfflineFirstNewsRepositoryTest {
@@ -160,6 +162,40 @@ class OfflineFirstNewsRepositoryTest {
 
         assertTrue(result.isFailure)
         assertSame(expected, result.exceptionOrNull())
+    }
+
+    @Test
+    fun `refresh rethrows cancellation when local replace is cancelled after remote success`() = runTest {
+        val expected = CancellationException("replace cancelled")
+        val local = ThrowingNewsLocalDataSource(replaceFailure = expected)
+        val remote = FakeRemoteArticleDataSource(
+            articleResult = Result.success(listOf(article(id = "1", title = "Remote", rating = 4))),
+        )
+        val repository = OfflineFirstNewsRepository(local, remote)
+
+        try {
+            repository.refresh(FilterCriteria())
+            fail("Expected CancellationException")
+        } catch (error: CancellationException) {
+            assertSame(expected, error)
+        }
+    }
+
+    @Test
+    fun `refresh rethrows cancellation when local mark stale is cancelled after remote failure`() = runTest {
+        val expected = CancellationException("mark stale cancelled")
+        val local = ThrowingNewsLocalDataSource(markStaleFailure = expected)
+        val remote = FakeRemoteArticleDataSource(
+            articleResult = Result.failure(IllegalStateException("remote offline")),
+        )
+        val repository = OfflineFirstNewsRepository(local, remote)
+
+        try {
+            repository.refresh(FilterCriteria())
+            fail("Expected CancellationException")
+        } catch (error: CancellationException) {
+            assertSame(expected, error)
+        }
     }
 
     private fun article(

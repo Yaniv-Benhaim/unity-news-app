@@ -6,6 +6,7 @@ import com.unitynews.server.domain.model.Article;
 import com.unitynews.server.domain.model.FilterCriteria;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
 
@@ -60,6 +61,16 @@ public class FilterArticlesUseCaseTest {
         List<Article> result = useCase.invoke(articles, new FilterCriteria("unity", Set.of(1)));
 
         assertEquals(Collections.emptyList(), result);
+    }
+
+    @Test
+    public void unknownDynamicFiltersDoNotChangeCurrentFiltering() {
+        List<Article> result = useCase.invoke(
+                articles,
+                new FilterCriteria(null, Collections.emptySet(), Map.of("section", Set.of("sports")))
+        );
+
+        assertEquals(articles, result);
     }
 
     private Article article(String id, String title, int rating) {

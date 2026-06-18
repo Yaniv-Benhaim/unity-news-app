@@ -267,6 +267,7 @@ class NewsBackendService : Service() {
         FilterCriteria(
             titleQuery = titleQuery,
             ratingValues = ratingValues.toSet(),
+            dynamicValues = dynamicValues.mapValues { (_, values) -> values.toSet() },
         )
 
     private fun Article.toDto(): ArticleDto =

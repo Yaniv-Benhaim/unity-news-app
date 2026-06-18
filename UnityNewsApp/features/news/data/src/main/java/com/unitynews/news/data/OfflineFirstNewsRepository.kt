@@ -4,6 +4,7 @@ import com.unitynews.news.domain.model.Article
 import com.unitynews.news.domain.model.FilterCriteria
 import com.unitynews.news.domain.model.FilterSpec
 import com.unitynews.news.domain.repository.NewsRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 
 class OfflineFirstNewsRepository(
@@ -16,10 +17,12 @@ class OfflineFirstNewsRepository(
     override suspend fun refresh(criteria: FilterCriteria): Result<Unit> =
         remote.getArticles(criteria).fold(
             onSuccess = { articles ->
-                runCatching { local.replace(criteria, articles) }
+                resultPreservingCancellation { local.replace(criteria, articles) }
             },
             onFailure = { error ->
-                runCatching { local.markStale(criteria, error.message ?: "Remote refresh failed") }
+                resultPreservingCancellation {
+                    local.markStale(criteria, error.message ?: "Remote refresh failed")
+                }
                     .fold(
                         onSuccess = { Result.failure(error) },
                         onFailure = { localError -> Result.failure(localError) },
@@ -29,4 +32,14 @@ class OfflineFirstNewsRepository(
 
     override suspend fun getFilterSpecs(): Result<List<FilterSpec>> =
         remote.getFilterSpecs()
+
+    private suspend fun resultPreservingCancellation(block: suspend () -> Unit): Result<Unit> =
+        try {
+            block()
+            Result.success(Unit)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            Result.failure(error)
+        }
 }
