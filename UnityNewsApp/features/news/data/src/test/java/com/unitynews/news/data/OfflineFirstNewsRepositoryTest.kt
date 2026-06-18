@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -87,6 +88,80 @@ class OfflineFirstNewsRepositoryTest {
         assertEquals("backend unavailable", local.staleReason(criteria))
     }
 
+    @Test
+    fun `criteria with different custom filter values do not share cache entries`() = runTest {
+        val local = InMemoryNewsLocalDataSource()
+        val remote = FakeRemoteArticleDataSource(articleResult = Result.success(emptyList()))
+        val repository = OfflineFirstNewsRepository(local, remote)
+        val sportsCriteria = FilterCriteria(dynamicValues = mapOf("section" to setOf("sports")))
+        val financeCriteria = FilterCriteria(dynamicValues = mapOf("section" to setOf("finance")))
+        local.replace(sportsCriteria, listOf(article(id = "1", title = "Sports", rating = 4)))
+        local.replace(financeCriteria, listOf(article(id = "2", title = "Finance", rating = 5)))
+
+        repository.observeArticles(sportsCriteria).test {
+            assertEquals(listOf("Sports"), awaitItem().map { it.title })
+            cancelAndIgnoreRemainingEvents()
+        }
+        repository.observeArticles(financeCriteria).test {
+            assertEquals(listOf("Finance"), awaitItem().map { it.title })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `criteria dynamic value ordering does not destabilize cache key`() = runTest {
+        val local = InMemoryNewsLocalDataSource()
+        val remote = FakeRemoteArticleDataSource(articleResult = Result.success(emptyList()))
+        val repository = OfflineFirstNewsRepository(local, remote)
+        val firstCriteria = FilterCriteria(
+            dynamicValues = linkedMapOf(
+                "topic" to linkedSetOf("unity", "android"),
+                "region" to linkedSetOf("us", "eu"),
+            ),
+        )
+        val reorderedCriteria = FilterCriteria(
+            dynamicValues = linkedMapOf(
+                "region" to linkedSetOf("eu", "us"),
+                "topic" to linkedSetOf("android", "unity"),
+            ),
+        )
+        local.replace(firstCriteria, listOf(article(id = "1", title = "Stable", rating = 4)))
+
+        repository.observeArticles(reorderedCriteria).test {
+            assertEquals(listOf("Stable"), awaitItem().map { it.title })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `refresh returns failure when local replace throws after remote success`() = runTest {
+        val expected = IllegalStateException("disk write failed")
+        val local = ThrowingNewsLocalDataSource(replaceFailure = expected)
+        val remote = FakeRemoteArticleDataSource(
+            articleResult = Result.success(listOf(article(id = "1", title = "Remote", rating = 4))),
+        )
+        val repository = OfflineFirstNewsRepository(local, remote)
+
+        val result = repository.refresh(FilterCriteria())
+
+        assertTrue(result.isFailure)
+        assertSame(expected, result.exceptionOrNull())
+    }
+
+    @Test
+    fun `refresh returns failure when local mark stale throws after remote failure`() = runTest {
+        val expected = IllegalStateException("stale write failed")
+        val local = ThrowingNewsLocalDataSource(markStaleFailure = expected)
+        val remoteFailure = IllegalStateException("remote offline")
+        val remote = FakeRemoteArticleDataSource(articleResult = Result.failure(remoteFailure))
+        val repository = OfflineFirstNewsRepository(local, remote)
+
+        val result = repository.refresh(FilterCriteria())
+
+        assertTrue(result.isFailure)
+        assertSame(expected, result.exceptionOrNull())
+    }
+
     private fun article(
         id: String,
         title: String,
@@ -136,11 +211,30 @@ private class InMemoryNewsLocalDataSource : NewsLocalDataSource {
     private fun FilterCriteria.cacheKey(): String {
         val title = titleQuery?.trim().orEmpty()
         val ratings = ratingValues.sorted().joinToString(separator = ",")
-        return "title=$title|ratings=$ratings"
+        val dynamic = dynamicValues.toSortedMap().entries.joinToString(separator = "|") { (key, values) ->
+            "$key=${values.sorted().joinToString(separator = ",")}"
+        }
+        return "title=$title|ratings=$ratings|dynamic=$dynamic"
     }
 
     private data class CacheEntry(
         val articles: List<Article> = emptyList(),
         val staleReason: String? = null,
     )
+}
+
+private class ThrowingNewsLocalDataSource(
+    private val replaceFailure: Throwable? = null,
+    private val markStaleFailure: Throwable? = null,
+) : NewsLocalDataSource {
+    override fun observe(criteria: FilterCriteria): Flow<List<Article>> =
+        MutableStateFlow(emptyList())
+
+    override suspend fun replace(criteria: FilterCriteria, articles: List<Article>) {
+        replaceFailure?.let { throw it }
+    }
+
+    override suspend fun markStale(criteria: FilterCriteria, reason: String) {
+        markStaleFailure?.let { throw it }
+    }
 }

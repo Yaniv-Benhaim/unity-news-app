@@ -16,12 +16,14 @@ class OfflineFirstNewsRepository(
     override suspend fun refresh(criteria: FilterCriteria): Result<Unit> =
         remote.getArticles(criteria).fold(
             onSuccess = { articles ->
-                local.replace(criteria, articles)
-                Result.success(Unit)
+                runCatching { local.replace(criteria, articles) }
             },
             onFailure = { error ->
-                local.markStale(criteria, error.message ?: "Remote refresh failed")
-                Result.failure(error)
+                runCatching { local.markStale(criteria, error.message ?: "Remote refresh failed") }
+                    .fold(
+                        onSuccess = { Result.failure(error) },
+                        onFailure = { localError -> Result.failure(localError) },
+                    )
             },
         )
 

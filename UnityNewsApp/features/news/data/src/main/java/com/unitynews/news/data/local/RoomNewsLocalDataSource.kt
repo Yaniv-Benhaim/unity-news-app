@@ -3,23 +3,30 @@ package com.unitynews.news.data.local
 import com.unitynews.news.data.NewsLocalDataSource
 import com.unitynews.news.domain.model.Article
 import com.unitynews.news.domain.model.FilterCriteria
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 class RoomNewsLocalDataSource(
     private val dao: NewsDao,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : NewsLocalDataSource {
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observe(criteria: FilterCriteria): Flow<List<Article>> {
-        return dao.observeCachedQuery(criteria.toCriteriaHash()).map { cachedQuery ->
-            val articleIds = cachedQuery?.decodeArticleIds().orEmpty()
-            if (articleIds.isEmpty()) {
-                emptyList()
-            } else {
-                val entitiesById = dao.getArticlesByIds(articleIds).associateBy { it.id }
-                articleIds.mapNotNull { id -> entitiesById[id]?.toDomain() }
+        return dao.observeCachedQuery(criteria.toCriteriaHash())
+            .map { cachedQuery -> cachedQuery?.decodeArticleIds().orEmpty() }
+            .flatMapLatest { articleIds ->
+                if (articleIds.isEmpty()) {
+                    flowOf(emptyList())
+                } else {
+                    dao.observeArticlesByIds(articleIds).map { entities ->
+                        val entitiesById = entities.associateBy { it.id }
+                        articleIds.mapNotNull { id -> entitiesById[id]?.toDomain() }
+                    }
+                }
             }
-        }
     }
 
     override suspend fun replace(criteria: FilterCriteria, articles: List<Article>) {

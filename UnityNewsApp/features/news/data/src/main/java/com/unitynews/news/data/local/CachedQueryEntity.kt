@@ -16,9 +16,14 @@ data class CachedQueryEntity(
 )
 
 internal fun FilterCriteria.toCriteriaHash(): String {
-    val normalizedTitle = titleQuery?.trim().orEmpty()
-    val normalizedRatings = ratingValues.sorted().joinToString(separator = ",")
-    return "title=$normalizedTitle|ratings=$normalizedRatings"
+    val normalizedValues = linkedMapOf(
+        "title" to listOf(titleQuery?.trim().orEmpty()),
+        "ratings" to ratingValues.sorted().map { it.toString() },
+    )
+    dynamicValues.toSortedMap().forEach { (key, values) ->
+        normalizedValues["dynamic:${key.trim()}"] = values.map { it.trim() }.sorted()
+    }
+    return Json.encodeToString(normalizedValues)
 }
 
 internal fun encodeArticleIds(articleIds: List<String>): String =

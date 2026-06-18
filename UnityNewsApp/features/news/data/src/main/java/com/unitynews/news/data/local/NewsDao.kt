@@ -63,5 +63,5 @@ abstract class NewsDao {
     abstract fun observeCachedQuery(criteriaHash: String): Flow<CachedQueryEntity?>
 
     @Query("SELECT * FROM articles WHERE id IN (:articleIds)")
-    abstract suspend fun getArticlesByIds(articleIds: List<String>): List<ArticleEntity>
+    abstract fun observeArticlesByIds(articleIds: List<String>): Flow<List<ArticleEntity>>
 }
