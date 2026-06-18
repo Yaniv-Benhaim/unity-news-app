@@ -128,9 +128,16 @@ class AndroidBackendConnection(
             }
 
             override fun onServiceDisconnected(name: ComponentName) {
-                synchronized(lock) {
+                val disconnectedConnection = synchronized(lock) {
                     service = null
+                    if (serviceConnection === connection) {
+                        serviceConnection = null
+                        connection
+                    } else {
+                        null
+                    }
                 }
+                disconnectedConnection?.let { serviceBinder.unbindSafely(it) }
             }
 
             override fun onBindingDied(name: ComponentName) {

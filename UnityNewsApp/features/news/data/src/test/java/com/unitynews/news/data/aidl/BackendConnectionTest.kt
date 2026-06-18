@@ -86,6 +86,32 @@ class BackendConnectionTest {
         assertTrue(result.await().isFailure)
         assertEquals(1, binder.unbindCalls)
     }
+
+    @Test
+    fun `service disconnected unbinds old connection before reconnecting`() = runTest {
+        val firstService = FakeConnectionBackendService()
+        val secondService = FakeConnectionBackendService()
+        val services = ArrayDeque(listOf(firstService, secondService))
+        val binder = FakeServiceBinder(serviceFactory = { services.removeFirst() })
+        val connection = AndroidBackendConnection(serviceBinder = binder)
+
+        val firstConnect = async { connection.connect() }
+        runCurrent()
+        val firstConnection = binder.lastConnection
+        firstConnection.onServiceConnected(componentName, firstService.asBinder())
+        assertSame(firstService, firstConnect.await())
+
+        firstConnection.onServiceDisconnected(componentName)
+        assertEquals(1, binder.unbindCalls)
+
+        val secondConnect = async { connection.connect() }
+        runCurrent()
+        assertEquals(2, binder.bindCalls)
+        binder.lastConnection.onServiceConnected(componentName, secondService.asBinder())
+
+        assertSame(secondService, secondConnect.await())
+        assertEquals(1, binder.unbindCalls)
+    }
 }
 
 private fun ServiceConnection.callServiceConnectionCallback(methodName: String, name: ComponentName) {
