@@ -31,9 +31,11 @@ class NewsViewModel(
     private val staleMessage = MutableStateFlow<String?>(null)
     private val backendMissing = MutableStateFlow(false)
     private val streamErrorMessage = MutableStateFlow<String?>(null)
+    private val observeRevision = MutableStateFlow(0)
 
-    private val articles = mutableCriteria
+    private val articles = combine(mutableCriteria, observeRevision) { criteria, _ -> criteria }
         .flatMapLatest { criteria ->
+            streamErrorMessage.value = null
             repository.observeArticles(criteria)
                 .catch { error ->
                     streamErrorMessage.value = error.readableMessage("Unable to load articles")
@@ -82,30 +84,58 @@ class NewsViewModel(
     }
 
     fun refresh() {
+        if (isRefreshing.value) {
+            return
+        }
+        isRefreshing.value = true
         viewModelScope.launch {
-            isRefreshing.value = true
             staleMessage.value = null
-            repository.refresh(mutableCriteria.value)
-                .onSuccess {
-                    backendMissing.value = false
-                }
-                .onFailure { error ->
-                    if (error is CancellationException) {
-                        throw error
+            streamErrorMessage.value = null
+            try {
+                repository.refresh(mutableCriteria.value)
+                    .onSuccess {
+                        backendMissing.value = false
+                        staleMessage.value = null
+                        loadFilterSpecs()
+                        observeRevision.value += 1
                     }
-                    backendMissing.value = true
-                    staleMessage.value = error.readableMessage("Unable to refresh articles")
-                }
-            isRefreshing.value = false
+                    .onFailure { error ->
+                        if (error is CancellationException) {
+                            throw error
+                        }
+                        backendMissing.value = true
+                        staleMessage.value = error.readableMessage("Unable to refresh articles")
+                    }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                backendMissing.value = true
+                staleMessage.value = error.readableMessage("Unable to refresh articles")
+            } finally {
+                isRefreshing.value = false
+            }
         }
     }
 
     fun updateTextFilter(key: String, value: String) {
-        mutableCriteria.value = mutableCriteria.value.updateTextFilter(key, value)
+        updateCriteria {
+            it.updateTextFilter(key, value)
+        }
     }
 
     fun toggleMultiSelectFilter(key: String, option: String, selected: Boolean) {
-        mutableCriteria.value = mutableCriteria.value.updateMultiSelectFilter(key, option, selected)
+        updateCriteria {
+            it.updateMultiSelectFilter(key, option, selected)
+        }
+    }
+
+    private fun updateCriteria(transform: (FilterCriteria) -> FilterCriteria) {
+        val nextCriteria = transform(mutableCriteria.value)
+        if (nextCriteria != mutableCriteria.value) {
+            streamErrorMessage.value = null
+            staleMessage.value = null
+            mutableCriteria.value = nextCriteria
+        }
     }
 
     private fun loadFilterSpecs() {

@@ -50,14 +50,18 @@ fun NewsScreen(
     onMultiSelectFilterChanged: (key: String, option: String, selected: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isRefreshing = (state as? NewsUiState.Content)?.isRefreshing == true
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
                 title = { Text("Unity News") },
                 actions = {
-                    TextButton(onClick = onRefresh) {
-                        Text("Refresh")
+                    TextButton(
+                        onClick = onRefresh,
+                        enabled = !isRefreshing,
+                    ) {
+                        Text(if (isRefreshing) "Refreshing" else "Refresh")
                     }
                 },
             )

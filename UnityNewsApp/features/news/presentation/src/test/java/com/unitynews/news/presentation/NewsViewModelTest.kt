@@ -9,6 +9,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -98,6 +100,93 @@ class NewsViewModelTest {
         )
     }
 
+    @Test
+    fun `thrown refresh exception preserves cached content and resets refreshing`() = runTest {
+        val cachedArticles = listOf(article(id = "1", title = "Cached"))
+        val repository = FakeNewsRepository(
+            articles = MutableStateFlow(cachedArticles),
+            refreshFailure = IllegalStateException("backend exploded"),
+        )
+        val viewModel = NewsViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertTrue(state is NewsUiState.Content)
+        state as NewsUiState.Content
+        assertEquals(cachedArticles, state.articles)
+        assertEquals(false, state.isRefreshing)
+        assertEquals("backend exploded", state.staleMessage)
+    }
+
+    @Test
+    fun `observe stream error recovers after criteria change reobserves successfully`() = runTest {
+        val recoveredArticle = article(id = "2", title = "Recovered")
+        val repository = FakeNewsRepository(
+            observeArticlesOverride = { criteria ->
+                if (criteria.titleQuery == "recovered") {
+                    flowOf(listOf(recoveredArticle))
+                } else {
+                    flow { throw IllegalStateException("observe failed") }
+                }
+            },
+        )
+        val viewModel = NewsViewModel(repository)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value is NewsUiState.Error)
+
+        viewModel.updateTextFilter(key = "title", value = "recovered")
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertTrue(state is NewsUiState.Content)
+        state as NewsUiState.Content
+        assertEquals(listOf(recoveredArticle), state.articles)
+        assertNull(state.staleMessage)
+    }
+
+    @Test
+    fun `refresh success reloads filter specs after initial backend failure`() = runTest {
+        val repository = FakeNewsRepository(
+            articles = MutableStateFlow(listOf(article(id = "1", title = "Cached"))),
+            filterSpecResults = ArrayDeque(
+                listOf(
+                    Result.failure(IllegalStateException("backend missing")),
+                    Result.success(listOf(FilterSpec(key = "section", label = "Section", type = FilterType.MultiSelect))),
+                ),
+            ),
+            refreshResult = Result.success(Unit),
+        )
+        val viewModel = NewsViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertTrue(state is NewsUiState.Content)
+        state as NewsUiState.Content
+        assertEquals(listOf("Section"), state.filters.map { it.label })
+    }
+
+    @Test
+    fun `ignores overlapping refresh calls`() = runTest {
+        val repository = FakeNewsRepository(
+            articles = MutableStateFlow(listOf(article(id = "1", title = "Cached"))),
+        )
+        val viewModel = NewsViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.refresh()
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertEquals(1, repository.refreshCalls)
+    }
+
     private fun article(
         id: String,
         title: String,
@@ -129,16 +218,30 @@ class MainDispatcherRule(
 private class FakeNewsRepository(
     private val articles: MutableStateFlow<List<Article>> = MutableStateFlow(emptyList()),
     private val filterSpecsResult: Result<List<FilterSpec>> = Result.success(emptyList()),
+    private val filterSpecResults: ArrayDeque<Result<List<FilterSpec>>> = ArrayDeque(),
     private val refreshResult: Result<Unit> = Result.success(Unit),
+    private val refreshFailure: Throwable? = null,
+    private val observeArticlesOverride: ((FilterCriteria) -> Flow<List<Article>>)? = null,
 ) : NewsRepository {
     val observedCriteria = mutableListOf<FilterCriteria>()
+    var refreshCalls = 0
+        private set
 
     override fun observeArticles(criteria: FilterCriteria): Flow<List<Article>> {
         observedCriteria += criteria
-        return articles
+        return observeArticlesOverride?.invoke(criteria) ?: articles
     }
 
-    override suspend fun refresh(criteria: FilterCriteria): Result<Unit> = refreshResult
+    override suspend fun refresh(criteria: FilterCriteria): Result<Unit> {
+        refreshCalls += 1
+        refreshFailure?.let { throw it }
+        return refreshResult
+    }
 
-    override suspend fun getFilterSpecs(): Result<List<FilterSpec>> = filterSpecsResult
+    override suspend fun getFilterSpecs(): Result<List<FilterSpec>> =
+        if (filterSpecResults.isEmpty()) {
+            filterSpecsResult
+        } else {
+            filterSpecResults.removeFirst()
+        }
 }
