@@ -6,7 +6,7 @@
 
 **Architecture:** The UI app talks to the backend app through a versioned AIDL bound-service contract. The UI app keeps Room as its source of truth and hides backend access behind `RemoteArticleDataSource`, so AIDL can later be replaced by HTTP without changing domain or presentation. The backend app owns bundled `articles.json`, filter specs, filter execution, caller validation, foreground-service runtime, and a visible operator console.
 
-**Tech Stack:** Kotlin 2.2.10, Android Gradle Plugin 9.2.1, Jetpack Compose, Hilt 2.59.2, KSP 2.2.10-2.0.2, Room 2.8.4, Coil 2.7.0, kotlinx.serialization 1.11.0, kotlinx.coroutines-test 1.11.0, Turbine 1.2.1, JUnit 4.
+**Tech Stack:** Android Gradle Plugin 9.2.1 with built-in Kotlin, Jetpack Compose, Hilt 2.59.2, KSP 2.3.6, Room 2.8.4, Coil 2.7.0, kotlinx.serialization 1.11.0, kotlinx.coroutines-test 1.11.0, Turbine 1.2.1, JUnit 4.
 
 ---
 
@@ -16,6 +16,7 @@
 - Keep `UnityNewsApp` and `backend` as separate Gradle projects.
 - Do not add a shared runtime module between the two projects.
 - Put duplicated AIDL contracts under feature data modules, not app modules, so data modules can own IPC adapters without depending on `app`.
+- Use AGP 9 built-in Kotlin in Android modules. Do not add `android.builtInKotlin=false`, `android.newDsl=false`, or `android.disallowKotlinSourceSets=false`.
 - Keep UI filtering as criteria building only. Backend filtering remains authoritative.
 - Whenever a test references Android framework classes, prefer Robolectric-free JVM tests first; use fakes and pure Kotlin where possible.
 
@@ -110,7 +111,7 @@ Add these versions, libraries, and plugins to both `gradle/libs.versions.toml` f
 ```toml
 [versions]
 hilt = "2.59.2"
-ksp = "2.2.10-2.0.2"
+ksp = "2.3.6"
 room = "2.8.4"
 coil = "2.7.0"
 serializationJson = "1.11.0"
@@ -130,7 +131,6 @@ turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine
 
 [plugins]
 android-library = { id = "com.android.library", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
@@ -144,7 +144,6 @@ For Compose UI modules (`core/ui`, `features/news/presentation`, `features/serve
 ```kotlin
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
@@ -196,7 +195,6 @@ For data modules, use this shape and update `namespace` plus dependencies:
 ```kotlin
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
