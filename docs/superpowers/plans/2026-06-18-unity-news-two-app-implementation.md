@@ -24,7 +24,7 @@
 
 ### Repo-Level
 
-- Create: `scripts/verify-aidl-contracts.sh` - compares duplicated AIDL contracts across projects.
+- Create: `scripts/verify-aidl-contracts.sh` - compares duplicated AIDL contracts and Kotlin DTO contract files across projects.
 - Modify: `docs/DESIGN.md` - update AIDL path from app modules to feature data modules.
 - Create: `README.md` - review flow, build/test commands, AI tooling disclosure.
 
@@ -380,15 +380,14 @@ parcelable BackendStatusDto;
 
 - [ ] **Step 2: Write Kotlin Parcelable DTOs in both data modules**
 
-Create `ArticleDto.kt`:
+Create `ArticleDto.kt` as an explicit `Parcelable` implementation:
 
 ```kotlin
 package com.unitynews.contract
 
+import android.os.Parcel
 import android.os.Parcelable
-import kotlinx.parcelize.Parcelize
 
-@Parcelize
 data class ArticleDto(
     val id: String,
     val title: String,
@@ -398,65 +397,149 @@ data class ArticleDto(
     val placeholderRed: Int,
     val placeholderGreen: Int,
     val placeholderBlue: Int,
-) : Parcelable
+) : Parcelable {
+    constructor(parcel: Parcel) : this(
+        id = parcel.readString().orEmpty(),
+        title = parcel.readString().orEmpty(),
+        description = parcel.readString().orEmpty(),
+        imageUrl = parcel.readString().orEmpty(),
+        rating = parcel.readInt(),
+        placeholderRed = parcel.readInt(),
+        placeholderGreen = parcel.readInt(),
+        placeholderBlue = parcel.readInt(),
+    )
+
+    override fun writeToParcel(parcel: Parcel, flags: Int) {
+        parcel.writeString(id)
+        parcel.writeString(title)
+        parcel.writeString(description)
+        parcel.writeString(imageUrl)
+        parcel.writeInt(rating)
+        parcel.writeInt(placeholderRed)
+        parcel.writeInt(placeholderGreen)
+        parcel.writeInt(placeholderBlue)
+    }
+
+    override fun describeContents(): Int = 0
+
+    companion object CREATOR : Parcelable.Creator<ArticleDto> {
+        override fun createFromParcel(parcel: Parcel): ArticleDto = ArticleDto(parcel)
+
+        override fun newArray(size: Int): Array<ArticleDto?> = arrayOfNulls(size)
+    }
+}
 ```
 
-Create `ArticleFilterRequest.kt`:
+Create `ArticleFilterRequest.kt` as an explicit `Parcelable` implementation:
 
 ```kotlin
 package com.unitynews.contract
 
+import android.os.Parcel
 import android.os.Parcelable
-import kotlinx.parcelize.Parcelize
 
-@Parcelize
 data class ArticleFilterRequest(
     val titleQuery: String?,
     val ratingValues: List<Int>,
     val requestId: String,
-) : Parcelable
+) : Parcelable {
+    constructor(parcel: Parcel) : this(
+        titleQuery = parcel.readString(),
+        ratingValues = parcel.createIntArray()?.toList().orEmpty(),
+        requestId = parcel.readString().orEmpty(),
+    )
+
+    override fun writeToParcel(parcel: Parcel, flags: Int) {
+        parcel.writeString(titleQuery)
+        parcel.writeIntArray(ratingValues.toIntArray())
+        parcel.writeString(requestId)
+    }
+
+    override fun describeContents(): Int = 0
+
+    companion object CREATOR : Parcelable.Creator<ArticleFilterRequest> {
+        override fun createFromParcel(parcel: Parcel): ArticleFilterRequest =
+            ArticleFilterRequest(parcel)
+
+        override fun newArray(size: Int): Array<ArticleFilterRequest?> = arrayOfNulls(size)
+    }
+}
 ```
 
-Create `FilterSpecDto.kt`:
+Create `FilterSpecDto.kt` as an explicit `Parcelable` implementation:
 
 ```kotlin
 package com.unitynews.contract
 
+import android.os.Parcel
 import android.os.Parcelable
-import kotlinx.parcelize.Parcelize
 
-@Parcelize
 data class FilterSpecDto(
     val key: String,
     val label: String,
     val type: String,
     val options: List<String>,
-) : Parcelable
+) : Parcelable {
+    constructor(parcel: Parcel) : this(
+        key = parcel.readString().orEmpty(),
+        label = parcel.readString().orEmpty(),
+        type = parcel.readString().orEmpty(),
+        options = parcel.createStringArrayList().orEmpty(),
+    )
+
+    override fun writeToParcel(parcel: Parcel, flags: Int) {
+        parcel.writeString(key)
+        parcel.writeString(label)
+        parcel.writeString(type)
+        parcel.writeStringList(options)
+    }
+
+    override fun describeContents(): Int = 0
+
+    companion object CREATOR : Parcelable.Creator<FilterSpecDto> {
+        override fun createFromParcel(parcel: Parcel): FilterSpecDto = FilterSpecDto(parcel)
+
+        override fun newArray(size: Int): Array<FilterSpecDto?> = arrayOfNulls(size)
+    }
+}
 ```
 
-Create `BackendStatusDto.kt`:
+Create `BackendStatusDto.kt` as an explicit `Parcelable` implementation:
 
 ```kotlin
 package com.unitynews.contract
 
+import android.os.Parcel
 import android.os.Parcelable
-import kotlinx.parcelize.Parcelize
 
-@Parcelize
 data class BackendStatusDto(
     val isRunning: Boolean,
     val scenario: String,
     val articleCount: Int,
-) : Parcelable
-```
+) : Parcelable {
+    constructor(parcel: Parcel) : this(
+        isRunning = parcel.readInt() != 0,
+        scenario = parcel.readString().orEmpty(),
+        articleCount = parcel.readInt(),
+    )
 
-Add the Kotlin Parcelize plugin to both data module build files:
+    override fun writeToParcel(parcel: Parcel, flags: Int) {
+        parcel.writeInt(if (isRunning) 1 else 0)
+        parcel.writeString(scenario)
+        parcel.writeInt(articleCount)
+    }
 
-```kotlin
-plugins {
-    id("kotlin-parcelize")
+    override fun describeContents(): Int = 0
+
+    companion object CREATOR : Parcelable.Creator<BackendStatusDto> {
+        override fun createFromParcel(parcel: Parcel): BackendStatusDto = BackendStatusDto(parcel)
+
+        override fun newArray(size: Int): Array<BackendStatusDto?> = arrayOfNulls(size)
+    }
 }
 ```
+
+Do not add a custom Parcelize compiler configuration or legacy AGP Kotlin opt-out flags.
 
 - [ ] **Step 3: Add contract drift script**
 
@@ -466,21 +549,34 @@ Create `scripts/verify-aidl-contracts.sh`:
 #!/usr/bin/env bash
 set -euo pipefail
 
-UI_DIR="UnityNewsApp/features/news/data/src/main/aidl/com/unitynews/contract"
-BACKEND_DIR="backend/features/server/data/src/main/aidl/com/unitynews/contract"
+UI_AIDL_DIR="UnityNewsApp/features/news/data/src/main/aidl/com/unitynews/contract"
+BACKEND_AIDL_DIR="backend/features/server/data/src/main/aidl/com/unitynews/contract"
+UI_DTO_DIR="UnityNewsApp/features/news/data/src/main/java/com/unitynews/contract"
+BACKEND_DTO_DIR="backend/features/server/data/src/main/java/com/unitynews/contract"
 
-if [[ ! -d "$UI_DIR" ]]; then
-  echo "Missing UI AIDL contract directory: $UI_DIR" >&2
+if [[ ! -d "$UI_AIDL_DIR" ]]; then
+  echo "Missing UI AIDL contract directory: $UI_AIDL_DIR" >&2
   exit 1
 fi
 
-if [[ ! -d "$BACKEND_DIR" ]]; then
-  echo "Missing backend AIDL contract directory: $BACKEND_DIR" >&2
+if [[ ! -d "$BACKEND_AIDL_DIR" ]]; then
+  echo "Missing backend AIDL contract directory: $BACKEND_AIDL_DIR" >&2
   exit 1
 fi
 
-diff -ru "$UI_DIR" "$BACKEND_DIR"
-echo "AIDL contracts match."
+if [[ ! -d "$UI_DTO_DIR" ]]; then
+  echo "Missing UI DTO contract directory: $UI_DTO_DIR" >&2
+  exit 1
+fi
+
+if [[ ! -d "$BACKEND_DTO_DIR" ]]; then
+  echo "Missing backend DTO contract directory: $BACKEND_DTO_DIR" >&2
+  exit 1
+fi
+
+diff -ru "$UI_AIDL_DIR" "$BACKEND_AIDL_DIR"
+diff -ru "$UI_DTO_DIR" "$BACKEND_DTO_DIR"
+echo "AIDL and DTO contracts match."
 ```
 
 Run:
@@ -490,7 +586,7 @@ chmod +x scripts/verify-aidl-contracts.sh
 ./scripts/verify-aidl-contracts.sh
 ```
 
-Expected: `AIDL contracts match.`
+Expected: `AIDL and DTO contracts match.`
 
 - [ ] **Step 4: Confirm design doc AIDL paths**
 

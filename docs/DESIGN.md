@@ -197,7 +197,7 @@ UnityNewsApp/features/news/data/src/main/aidl/com/unitynews/contract/
 backend/features/server/data/src/main/aidl/com/unitynews/contract/
 ```
 
-`scripts/verify-aidl-contracts.sh` compares both directories and fails if the contract drifts.
+`scripts/verify-aidl-contracts.sh` compares both AIDL directories and the Kotlin DTO contract directories, then fails if either surface drifts.
 
 ## Security Model
 
@@ -534,7 +534,7 @@ Backend errors are typed at the IPC boundary and mapped into domain/presentation
 
 ### Contract Tests
 
-- Verifies duplicated AIDL files are identical.
+- Verifies duplicated AIDL files and Kotlin DTO contract files are identical.
 - Verifies API version compatibility behavior.
 
 ## Build And Verification
