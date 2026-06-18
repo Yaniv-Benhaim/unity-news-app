@@ -193,8 +193,8 @@ BackendStatusDto
 The AIDL files are duplicated in both projects:
 
 ```text
-UnityNewsApp/app/src/main/aidl/com/unitynews/contract/
-backend/app/src/main/aidl/com/unitynews/contract/
+UnityNewsApp/features/news/data/src/main/aidl/com/unitynews/contract/
+backend/features/server/data/src/main/aidl/com/unitynews/contract/
 ```
 
 `scripts/verify-aidl-contracts.sh` compares both directories and fails if the contract drifts.
