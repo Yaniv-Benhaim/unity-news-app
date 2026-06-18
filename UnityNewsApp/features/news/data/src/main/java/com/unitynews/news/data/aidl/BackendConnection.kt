@@ -129,8 +129,8 @@ class AndroidBackendConnection(
 
             override fun onServiceDisconnected(name: ComponentName) {
                 val disconnectedConnection = synchronized(lock) {
-                    service = null
                     if (serviceConnection === connection) {
+                        service = null
                         serviceConnection = null
                         connection
                     } else {

@@ -112,6 +112,41 @@ class BackendConnectionTest {
         assertSame(secondService, secondConnect.await())
         assertEquals(1, binder.unbindCalls)
     }
+
+    @Test
+    fun `stale service disconnected callback does not clear newer cached service`() = runTest {
+        val firstService = FakeConnectionBackendService()
+        val secondService = FakeConnectionBackendService()
+        val thirdService = FakeConnectionBackendService()
+        val services = ArrayDeque(listOf(firstService, secondService, thirdService))
+        val binder = FakeServiceBinder(serviceFactory = { services.removeFirst() })
+        val connection = AndroidBackendConnection(serviceBinder = binder)
+
+        val firstConnect = async { connection.connect() }
+        runCurrent()
+        val firstConnection = binder.lastConnection
+        firstConnection.onServiceConnected(componentName, firstService.asBinder())
+        assertSame(firstService, firstConnect.await())
+
+        firstConnection.onServiceDisconnected(componentName)
+        val secondConnect = async { connection.connect() }
+        runCurrent()
+        binder.lastConnection.onServiceConnected(componentName, secondService.asBinder())
+        assertSame(secondService, secondConnect.await())
+        assertEquals(2, binder.bindCalls)
+        assertEquals(1, binder.unbindCalls)
+
+        firstConnection.onServiceDisconnected(componentName)
+        val cachedConnect = async { connection.connect() }
+        runCurrent()
+        if (binder.bindCalls > 2) {
+            binder.lastConnection.onServiceConnected(componentName, thirdService.asBinder())
+        }
+
+        assertSame(secondService, cachedConnect.await())
+        assertEquals(2, binder.bindCalls)
+        assertEquals(1, binder.unbindCalls)
+    }
 }
 
 private fun ServiceConnection.callServiceConnectionCallback(methodName: String, name: ComponentName) {
