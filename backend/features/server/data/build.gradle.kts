@@ -27,7 +27,9 @@ android {
 }
 
 dependencies {
+    implementation(project(":features:server:domain"))
     implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
