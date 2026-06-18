@@ -231,7 +231,6 @@ In `UnityNewsApp/app/build.gradle.kts`, add Hilt plugin and module dependencies:
 ```kotlin
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
