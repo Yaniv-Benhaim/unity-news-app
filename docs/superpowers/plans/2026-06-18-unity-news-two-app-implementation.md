@@ -266,8 +266,8 @@ dependencies {
 Run:
 
 ```bash
-./UnityNewsApp/gradlew :app:assembleDebug
-./backend/gradlew :app:assembleDebug
+(cd UnityNewsApp && ./gradlew :app:assembleDebug)
+(cd backend && ./gradlew :app:assembleDebug)
 ```
 
 Expected: both commands finish with `BUILD SUCCESSFUL`.
@@ -492,16 +492,9 @@ chmod +x scripts/verify-aidl-contracts.sh
 
 Expected: `AIDL contracts match.`
 
-- [ ] **Step 4: Update design doc AIDL paths**
+- [ ] **Step 4: Confirm design doc AIDL paths**
 
-In `docs/DESIGN.md`, replace:
-
-```text
-UnityNewsApp/app/src/main/aidl/com/unitynews/contract/
-backend/app/src/main/aidl/com/unitynews/contract/
-```
-
-with:
+In `docs/DESIGN.md`, ensure the documented AIDL paths are:
 
 ```text
 UnityNewsApp/features/news/data/src/main/aidl/com/unitynews/contract/
@@ -513,8 +506,8 @@ backend/features/server/data/src/main/aidl/com/unitynews/contract/
 Run:
 
 ```bash
-./UnityNewsApp/gradlew :features:news:data:assembleDebug
-./backend/gradlew :features:server:data:assembleDebug
+(cd UnityNewsApp && ./gradlew :features:news:data:assembleDebug)
+(cd backend && ./gradlew :features:server:data:assembleDebug)
 ./scripts/verify-aidl-contracts.sh
 ```
 
@@ -609,7 +602,7 @@ class FilterArticlesUseCaseTest {
 Run:
 
 ```bash
-./backend/gradlew :features:server:domain:test
+(cd backend && ./gradlew :features:server:domain:test)
 ```
 
 Expected: fails because domain types do not exist.
@@ -736,7 +729,7 @@ class GetFilterSpecsUseCase {
 Run:
 
 ```bash
-./backend/gradlew :features:server:domain:test
+(cd backend && ./gradlew :features:server:domain:test)
 ```
 
 Expected: `BUILD SUCCESSFUL`.
@@ -1009,11 +1002,11 @@ fun BackendConsoleScreen(
 Run:
 
 ```bash
-./backend/gradlew :features:server:data:testDebugUnitTest
-./backend/gradlew :app:assembleDebug
+(cd backend && ./gradlew :features:server:data:testDebugUnitTest)
+(cd backend && ./gradlew :app:assembleDebug)
 ```
 
-Expected: both commands pass. If `testDebugUnitTest` is unavailable for a library module, run `./backend/gradlew :features:server:data:test`.
+Expected: both commands pass. If `testDebugUnitTest` is unavailable for a library module, run `(cd backend && ./gradlew :features:server:data:test)`.
 
 - [ ] **Step 8: Commit**
 
@@ -1299,7 +1292,7 @@ abstract class NewsDatabase : RoomDatabase() {
 Run:
 
 ```bash
-./UnityNewsApp/gradlew :features:news:data:testDebugUnitTest
+(cd UnityNewsApp && ./gradlew :features:news:data:testDebugUnitTest)
 ```
 
 Expected: `BUILD SUCCESSFUL`.
@@ -1435,8 +1428,8 @@ class AidlArticleDataSource(
 Run:
 
 ```bash
-./UnityNewsApp/gradlew :features:news:data:testDebugUnitTest
-./UnityNewsApp/gradlew :features:news:data:assembleDebug
+(cd UnityNewsApp && ./gradlew :features:news:data:testDebugUnitTest)
+(cd UnityNewsApp && ./gradlew :features:news:data:assembleDebug)
 ```
 
 Expected: both commands pass.
@@ -1618,8 +1611,8 @@ fun BackendSetupScreen(
 Run:
 
 ```bash
-./UnityNewsApp/gradlew :features:news:presentation:testDebugUnitTest
-./UnityNewsApp/gradlew :app:assembleDebug
+(cd UnityNewsApp && ./gradlew :features:news:presentation:testDebugUnitTest)
+(cd UnityNewsApp && ./gradlew :app:assembleDebug)
 ```
 
 Expected: both commands pass.
@@ -1690,15 +1683,15 @@ The apps communicate over a versioned AIDL bound-service contract. The UI app re
 ## Build
 
 ```bash
-./UnityNewsApp/gradlew :app:assembleDebug
-./backend/gradlew :app:assembleDebug
+(cd UnityNewsApp && ./gradlew :app:assembleDebug)
+(cd backend && ./gradlew :app:assembleDebug)
 ```
 
 ## Test
 
 ```bash
-./UnityNewsApp/gradlew testDebugUnitTest
-./backend/gradlew testDebugUnitTest
+(cd UnityNewsApp && ./gradlew testDebugUnitTest)
+(cd backend && ./gradlew testDebugUnitTest)
 ./scripts/verify-aidl-contracts.sh
 ```
 
@@ -1722,12 +1715,12 @@ Run:
 
 ```bash
 ./scripts/verify-aidl-contracts.sh
-./UnityNewsApp/gradlew :app:assembleDebug
-./UnityNewsApp/gradlew :app:testDebugUnitTest
-./backend/gradlew :app:assembleDebug
-./backend/gradlew :app:testDebugUnitTest
-./UnityNewsApp/gradlew :app:assembleRelease
-./backend/gradlew :app:assembleRelease
+(cd UnityNewsApp && ./gradlew :app:assembleDebug)
+(cd UnityNewsApp && ./gradlew :app:testDebugUnitTest)
+(cd backend && ./gradlew :app:assembleDebug)
+(cd backend && ./gradlew :app:testDebugUnitTest)
+(cd UnityNewsApp && ./gradlew :app:assembleRelease)
+(cd backend && ./gradlew :app:assembleRelease)
 ```
 
 Expected: every command exits 0 with `BUILD SUCCESSFUL` for Gradle commands.

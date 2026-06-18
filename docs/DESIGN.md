@@ -542,18 +542,18 @@ Backend errors are typed at the IPC boundary and mapped into domain/presentation
 Expected local checks:
 
 ```bash
-./UnityNewsApp/gradlew testDebugUnitTest
-./UnityNewsApp/gradlew assembleDebug
-./backend/gradlew testDebugUnitTest
-./backend/gradlew assembleDebug
+(cd UnityNewsApp && ./gradlew testDebugUnitTest)
+(cd UnityNewsApp && ./gradlew assembleDebug)
+(cd backend && ./gradlew testDebugUnitTest)
+(cd backend && ./gradlew assembleDebug)
 ./scripts/verify-aidl-contracts.sh
 ```
 
 Release checks:
 
 ```bash
-./UnityNewsApp/gradlew assembleRelease
-./backend/gradlew assembleRelease
+(cd UnityNewsApp && ./gradlew assembleRelease)
+(cd backend && ./gradlew assembleRelease)
 ```
 
 Release builds enable:
