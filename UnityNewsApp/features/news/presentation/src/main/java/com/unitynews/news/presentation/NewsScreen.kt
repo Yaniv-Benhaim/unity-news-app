@@ -31,11 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.unitynews.news.domain.model.Article
 import com.unitynews.news.domain.model.FilterCriteria
 
@@ -196,25 +194,34 @@ private fun ArticleCard(article: Article) {
 
 @Composable
 private fun ArticleImage(article: Article) {
+    val artwork = article.toArticleArtwork()
     val placeholderColor = Color(
-        red = article.placeholderRed.coerceIn(0, 255),
-        green = article.placeholderGreen.coerceIn(0, 255),
-        blue = article.placeholderBlue.coerceIn(0, 255),
+        red = artwork.red,
+        green = artwork.green,
+        blue = artwork.blue,
     )
     Box(
         modifier = Modifier
             .size(width = 88.dp, height = 72.dp)
             .clip(MaterialTheme.shapes.small)
             .background(placeholderColor),
-    ) {
-        AsyncImage(
-            model = article.imageUrl.takeIf { it.isNotBlank() },
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
+    )
 }
+
+internal data class ArticleArtwork(
+    val red: Int,
+    val green: Int,
+    val blue: Int,
+    val imageModel: String?,
+)
+
+internal fun Article.toArticleArtwork(): ArticleArtwork =
+    ArticleArtwork(
+        red = placeholderRed.coerceIn(0, 255),
+        green = placeholderGreen.coerceIn(0, 255),
+        blue = placeholderBlue.coerceIn(0, 255),
+        imageModel = null,
+    )
 
 @Composable
 private fun StaleMessage(

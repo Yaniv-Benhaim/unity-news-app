@@ -97,6 +97,7 @@ class NewsViewModel @Inject constructor(
 
     init {
         loadFilterSpecs()
+        refresh()
     }
 
     fun refresh() {

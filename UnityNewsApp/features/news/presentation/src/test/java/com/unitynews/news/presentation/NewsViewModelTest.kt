@@ -54,6 +54,16 @@ class NewsViewModelTest {
     }
 
     @Test
+    fun `initialization refreshes articles for first launch`() = runTest {
+        val repository = FakeNewsRepository()
+
+        NewsViewModel(repository)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.refreshCalls)
+    }
+
+    @Test
     fun `known title and rating filter keys update built in criteria fields`() = runTest {
         val repository = FakeNewsRepository(
             filterSpecsResult = Result.success(
@@ -150,7 +160,7 @@ class NewsViewModelTest {
     }
 
     @Test
-    fun `refresh success reloads filter specs after initial backend failure`() = runTest {
+    fun `initial refresh success reloads filter specs after initial backend failure`() = runTest {
         val repository = FakeNewsRepository(
             articles = MutableStateFlow(listOf(article(id = "1", title = "Cached"))),
             filterSpecResults = ArrayDeque(
@@ -162,9 +172,6 @@ class NewsViewModelTest {
             refreshResult = Result.success(Unit),
         )
         val viewModel = NewsViewModel(repository)
-        advanceUntilIdle()
-
-        viewModel.refresh()
         advanceUntilIdle()
 
         val state = viewModel.state.value
@@ -185,7 +192,7 @@ class NewsViewModelTest {
         viewModel.refresh()
         advanceUntilIdle()
 
-        assertEquals(1, repository.refreshCalls)
+        assertEquals(2, repository.refreshCalls)
     }
 
     @Test
@@ -199,8 +206,6 @@ class NewsViewModelTest {
         val viewModel = NewsViewModel(repository)
         advanceUntilIdle()
 
-        viewModel.refresh()
-        advanceUntilIdle()
         refreshedFilters.complete(
             Result.success(listOf(FilterSpec(key = "section", label = "Section", type = FilterType.MultiSelect))),
         )
