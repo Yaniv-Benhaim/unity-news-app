@@ -24,4 +24,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "Unity News Backend"
 include(":app")
- 
+include(":core:ui")
+include(":core:data")
+include(":features:server:domain")
+include(":features:server:data")
+include(":features:server:presentation")
