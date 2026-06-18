@@ -1510,6 +1510,7 @@ class AidlArticleDataSource(
             titleQuery = titleQuery,
             ratingValues = ratingValues.toList(),
             requestId = System.currentTimeMillis().toString(),
+            dynamicValues = dynamicValues.mapValues { (_, values) -> values.toList() },
         )
     }
 
