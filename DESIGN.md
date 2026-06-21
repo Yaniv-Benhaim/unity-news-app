@@ -55,7 +55,7 @@ The backend owns the source data and filter execution. The UI app sends filter c
 | Filtering | Builds criteria only | Executes all filter logic |
 | Communication | AIDL client | AIDL bound service |
 | Persistence | Room offline cache | In-memory runtime state and bundled asset |
-| Security | Explicit binding, version validation, backend signature verification | Signature permission, caller validation, typed authorization failures |
+| Security | Package-scoped binding, version validation, backend signature verification | Signature permission, caller validation, typed authorization failures |
 | Fault scenarios | Renders resilient states | Provides normal, slow, empty, error, unauthorized modes |
 
 ## Repository Layout
@@ -64,10 +64,10 @@ The repository contains two separate Android Gradle projects:
 
 ```text
 unity-news-app/
+  README.md
+  DESIGN.md
   UnityNewsApp/
   backend/
-  docs/
-    DESIGN.md
 ```
 
 The apps intentionally remain separate projects. There is no shared runtime module between them. The shared boundary is the duplicated and verified AIDL contract, similar to how a production client/server system would use a versioned API artifact.
@@ -122,7 +122,7 @@ Rules:
 
 ## Communication Design
 
-Communication uses an exported AIDL bound service in the backend app. The UI app binds with an explicit component name.
+Communication uses an exported AIDL bound service in the backend app. The UI app binds with a package-scoped service action so only the expected backend package can answer the bind request.
 
 ```mermaid
 sequenceDiagram
@@ -134,7 +134,7 @@ sequenceDiagram
     participant Assets as Bundled JSON
 
     UI->>Client: applyFilters(criteria)
-    Client->>Binder: bindService(explicit ComponentName)
+    Client->>Binder: bindService(Intent(action).setPackage(backendPackage))
     Client->>Service: getApiVersion()
     Service-->>Client: supported version
     Client->>Service: getArticles(criteria, callback)
@@ -209,14 +209,14 @@ flowchart TD
     Package -- "Yes" --> Signature{"Expected signing certificate?"}
     Signature -- "No" --> Deny3["Return Unauthorized"]
     Signature -- "Yes" --> Version{"Supported API version?"}
-    Version -- "No" --> Incompatible["Return Incompatible Version"]
+    Version -- "No" --> ApiError["Return unsupported API error"]
     Version -- "Yes" --> Serve["Serve request"]
 ```
 
 Security controls:
 
 - Custom signature-level permission protects the backend service.
-- UI app binds with an explicit `ComponentName`.
+- UI app binds with a package-scoped service action.
 - Backend validates caller UID, package name, and signing certificate.
 - Backend returns typed unauthorized errors.
 - No real secrets are embedded in either APK.
@@ -239,7 +239,7 @@ flowchart LR
     Scenario --> UseCase["FilterArticlesUseCase"]
     UseCase --> Repo["ArticleRepository"]
     Repo --> Asset["assets/articles.json"]
-    UseCase --> Specs["FilterSpecProvider"]
+    UseCase --> Specs["GetFilterSpecsUseCase"]
     UseCase --> Logs["RequestLogStore"]
 ```
 
@@ -285,12 +285,10 @@ Filtering rules:
 
 The console displays:
 
-- service running/stopped state;
 - foreground service state;
 - current scenario;
 - article count;
-- request log entries;
-- last request duration and result count;
+- request log entries with criteria, scenario, result, callback delivery, and duration;
 
 The console supports:
 
@@ -449,23 +447,18 @@ If the UI app cannot detect or bind to the backend app, it shows a setup screen.
 
 ```mermaid
 flowchart TD
-    Start["UI app starts"] --> Detect{"Backend package installed?"}
-    Detect -- "No" --> Setup["Show setup screen"]
-    Setup --> Install["Open Android system installer or package listing"]
-    Install --> Approved{"User completes install?"}
-    Approved -- "No" --> Setup
-    Approved -- "Yes" --> Launch["Open backend console"]
-    Detect -- "Yes" --> Bind{"Can bind to service?"}
-    Launch --> StartService["User starts backend service"]
-    StartService --> Retry["Retry connection"]
-    Bind -- "No" --> OpenBackend["Open backend console"]
-    OpenBackend --> Retry
+    Start["UI app starts"] --> Bind{"Can bind to backend service?"}
+    Bind -- "No" --> Setup["Show backend setup screen"]
+    Setup --> Store["Open Play Store package listing or web fallback"]
+    Store --> UserAction["User installs or starts backend app"]
+    UserAction --> Retry["User returns and taps refresh"]
     Bind -- "Yes" --> Version{"Compatible API version?"}
-    Version -- "No" --> Incompatible["Show incompatible backend state"]
+    Retry --> Bind
+    Version -- "No" --> Error["Show backend error/setup state with message"]
     Version -- "Yes" --> News["Show news list"]
 ```
 
-Installation uses Android's system package installer. The UI app does not silently install the backend app and does not silently start the backend foreground service.
+The UI app does not silently install the backend app and does not silently start the backend foreground service. It routes the user to an install/start path and then retries the connection when the user returns.
 
 ## Error And State Model
 
