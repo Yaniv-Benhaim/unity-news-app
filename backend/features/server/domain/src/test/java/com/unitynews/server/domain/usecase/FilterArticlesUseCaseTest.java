@@ -30,35 +30,41 @@ public class FilterArticlesUseCaseTest {
 
     @Test
     public void titleFilterIsCaseInsensitiveContains() {
-        List<Article> result = useCase.invoke(articles, new FilterCriteria("unity", Collections.emptySet()));
+        List<Article> result = useCase.invoke(articles, criteria("title", Set.of("unity")));
 
         assertEquals(List.of(articles.get(0), articles.get(2)), result);
     }
 
     @Test
     public void blankTitleReturnsAllArticles() {
-        List<Article> result = useCase.invoke(articles, new FilterCriteria("   ", Collections.emptySet()));
+        List<Article> result = useCase.invoke(articles, criteria("title", Set.of("   ")));
 
         assertEquals(articles, result);
     }
 
     @Test
     public void ratingFilterSupportsMultipleValues() {
-        List<Article> result = useCase.invoke(articles, new FilterCriteria(null, Set.of(3, 5)));
+        List<Article> result = useCase.invoke(articles, criteria("rating", Set.of("3", "5")));
 
         assertEquals(List.of(articles.get(0), articles.get(2), articles.get(3)), result);
     }
 
     @Test
     public void titleAndRatingFiltersAreAppliedTogether() {
-        List<Article> result = useCase.invoke(articles, new FilterCriteria("unity", Set.of(3)));
+        List<Article> result = useCase.invoke(
+                articles,
+                new FilterCriteria(Map.of("title", Set.of("unity"), "rating", Set.of("3")))
+        );
 
         assertEquals(List.of(articles.get(2)), result);
     }
 
     @Test
     public void noMatchesReturnsEmptyList() {
-        List<Article> result = useCase.invoke(articles, new FilterCriteria("unity", Set.of(1)));
+        List<Article> result = useCase.invoke(
+                articles,
+                new FilterCriteria(Map.of("title", Set.of("unity"), "rating", Set.of("1")))
+        );
 
         assertEquals(Collections.emptyList(), result);
     }
@@ -67,10 +73,14 @@ public class FilterArticlesUseCaseTest {
     public void unknownDynamicFiltersDoNotChangeCurrentFiltering() {
         List<Article> result = useCase.invoke(
                 articles,
-                new FilterCriteria(null, Collections.emptySet(), Map.of("section", Set.of("sports")))
+                criteria("section", Set.of("sports"))
         );
 
         assertEquals(articles, result);
+    }
+
+    private FilterCriteria criteria(String key, Set<String> values) {
+        return new FilterCriteria(Map.of(key, values));
     }
 
     private Article article(String id, String title, int rating) {

@@ -31,6 +31,7 @@ ksp {
 }
 
 dependencies {
+    implementation(project(":core:data"))
     implementation(project(":features:news:domain"))
     implementation(libs.androidx.core.ktx)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}")

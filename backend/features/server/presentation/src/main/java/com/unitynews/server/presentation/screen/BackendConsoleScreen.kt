@@ -1,21 +1,18 @@
-package com.unitynews.server.presentation
+package com.unitynews.server.presentation.screen
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -24,12 +21,23 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.unitynews.backend.core.ui.ConsoleSection
+import com.unitynews.backend.core.ui.StatusLine
 import com.unitynews.server.domain.model.ServerScenario
+import com.unitynews.server.presentation.R
+import com.unitynews.server.presentation.model.BackendConsoleUiState
 
+/**
+ * Root screen for the backend control app.
+ *
+ * It exposes service controls, scenario controls, and recent request logs so a
+ * reviewer can see how the backend behaves while the reader app is running.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BackendConsoleScreen(
@@ -41,7 +49,10 @@ fun BackendConsoleScreen(
     onClearLogs: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Scaffold(modifier = modifier.fillMaxSize()) { innerPadding ->
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+    ) { innerPadding ->
         Surface(
             modifier = Modifier
                 .fillMaxSize()
@@ -55,40 +66,77 @@ fun BackendConsoleScreen(
                     .padding(horizontal = 20.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                Text(
-                    text = "Backend Console",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = stringResource(R.string.backend_console_title),
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = stringResource(R.string.backend_console_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
-                ConsoleSection(title = "Service") {
-                    StatusLine(label = "Foreground", value = if (uiState.isServiceRunning) "Running" else "Stopped")
-                    StatusLine(label = "Scenario", value = uiState.scenario.name)
-                    StatusLine(label = "Articles", value = uiState.articleCount.toString())
+                // Service section shows process/lifecycle state and foreground controls.
+                ConsoleSection(title = stringResource(R.string.backend_console_section_service)) {
+                    StatusLine(
+                        label = stringResource(R.string.backend_console_label_foreground),
+                        value = stringResource(
+                            if (uiState.isServiceRunning) {
+                                R.string.backend_console_value_running
+                            } else {
+                                R.string.backend_console_value_stopped
+                            },
+                        ),
+                    )
+                    StatusLine(
+                        label = stringResource(R.string.backend_console_label_scenario),
+                        value = uiState.scenario.displayName(),
+                    )
+                    StatusLine(
+                        label = stringResource(R.string.backend_console_label_articles),
+                        value = uiState.articleCount.toString(),
+                    )
 
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Button(
                             onClick = onStartService,
                             enabled = !uiState.isServiceRunning,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
                         ) {
-                            Text("Start")
+                            Text(stringResource(R.string.backend_console_action_start))
                         }
                         OutlinedButton(
                             onClick = onStopService,
                             enabled = uiState.isServiceRunning,
                         ) {
-                            Text("Stop")
+                            Text(stringResource(R.string.backend_console_action_stop))
                         }
                         OutlinedButton(onClick = onRefreshStatus) {
-                            Text(if (uiState.isRefreshing) "Refreshing" else "Refresh")
+                            Text(
+                                text = stringResource(
+                                    if (uiState.isRefreshing) {
+                                        R.string.backend_console_action_refreshing
+                                    } else {
+                                        R.string.backend_console_action_refresh
+                                    },
+                                ),
+                            )
                         }
                     }
                 }
 
-                ConsoleSection(title = "Scenarios") {
+                // Scenario section lets the reviewer force success/error/empty/slow responses.
+                ConsoleSection(title = stringResource(R.string.backend_console_section_scenarios)) {
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -98,31 +146,35 @@ fun BackendConsoleScreen(
                             FilterChip(
                                 selected = scenario == uiState.scenario,
                                 onClick = { onScenarioSelected(scenario) },
-                                label = { Text(scenario.name) },
+                                label = { Text(scenario.displayName()) },
                             )
                         }
                     }
                 }
 
-                ConsoleSection(title = "Request Logs") {
+                // Request logs are useful proof that reader/backend IPC is happening.
+                ConsoleSection(title = stringResource(R.string.backend_console_section_request_logs)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "${uiState.requestLogs.size} entries",
+                            text = stringResource(
+                                R.string.backend_console_request_log_count,
+                                uiState.requestLogs.size,
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         OutlinedButton(onClick = onClearLogs) {
-                            Text("Clear")
+                            Text(stringResource(R.string.backend_console_action_clear))
                         }
                     }
 
                     if (uiState.requestLogs.isEmpty()) {
                         Text(
-                            text = "No requests yet",
+                            text = stringResource(R.string.backend_console_no_requests),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -144,44 +196,16 @@ fun BackendConsoleScreen(
 }
 
 @Composable
-private fun ConsoleSection(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
-        content()
-        Spacer(modifier = Modifier.height(2.dp))
-        HorizontalDivider()
-    }
-}
-
-@Composable
-private fun StatusLine(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-        )
-    }
-}
+private fun ServerScenario.displayName(): String =
+    stringResource(
+        when (this) {
+            ServerScenario.Normal -> R.string.backend_console_scenario_normal
+            ServerScenario.Unauthorized -> R.string.backend_console_scenario_unauthorized
+            ServerScenario.ServerError -> R.string.backend_console_scenario_server_error
+            ServerScenario.Empty -> R.string.backend_console_scenario_empty
+            ServerScenario.Slow -> R.string.backend_console_scenario_slow
+        },
+    )
 
 @Preview(showBackground = true)
 @Composable

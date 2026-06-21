@@ -9,12 +9,23 @@ import com.unitynews.contract.INewsBackendService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
 
+/**
+ * Opens and closes the connection to the companion backend service.
+ *
+ * The rest of the data layer only asks for INewsBackendService and does not
+ * need to know how Android service binding works.
+ */
 interface BackendConnection {
     suspend fun connect(): INewsBackendService
 
     fun disconnect()
 }
 
+/**
+ * Thin wrapper around Android bindService/unbindService.
+ *
+ * Tests can fake this interface without needing a real Android service.
+ */
 interface ServiceBinder {
     fun bind(intent: Intent, connection: ServiceConnection, flags: Int): Boolean
 
@@ -23,6 +34,7 @@ interface ServiceBinder {
     fun asService(binder: IBinder): INewsBackendService?
 }
 
+/** Production ServiceBinder that delegates to Android framework APIs. */
 class AndroidServiceBinder(
     context: Context,
 ) : ServiceBinder {
@@ -39,6 +51,12 @@ class AndroidServiceBinder(
         INewsBackendService.Stub.asInterface(binder)
 }
 
+/**
+ * Thread-safe connector for the backend AIDL service.
+ *
+ * Multiple callers can ask for a connection at the same time. They will share
+ * one in-flight binding attempt instead of binding to the service repeatedly.
+ */
 class AndroidBackendConnection(
     private val serviceBinder: ServiceBinder,
     private val backendPackageName: String = BackendAvailabilityChecker.DEFAULT_BACKEND_PACKAGE,
@@ -66,11 +84,13 @@ class AndroidBackendConnection(
         val attemptToStart: BindingAttempt?
         val deferred = synchronized(lock) {
             service?.let { return it }
+            // If another coroutine is already binding, wait for the same result.
             inFlight?.let {
                 attemptToStart = null
                 return@synchronized it.deferred
             }
 
+            // No service and no in-flight attempt, so this caller creates one.
             createBindingAttempt().also { attempt ->
                 inFlight = attempt
                 serviceConnection = attempt.connection
@@ -78,10 +98,12 @@ class AndroidBackendConnection(
             }.deferred
         }
 
+        // Start the bind outside the synchronized block to avoid blocking other callers.
         attemptToStart?.start()
         return deferred.await()
     }
 
+    /** Clear cached service state and unbind from the backend if needed. */
     override fun disconnect() {
         val activeAttempt: BindingAttempt?
         val activeConnection: ServiceConnection?
@@ -97,6 +119,7 @@ class AndroidBackendConnection(
         activeConnection?.let { serviceBinder.unbindSafely(it) }
     }
 
+    /** Create the Android ServiceConnection object for one binding attempt. */
     private fun createBindingAttempt(): BindingAttempt {
         val deferred = CompletableDeferred<INewsBackendService>()
         lateinit var connection: ServiceConnection
@@ -111,6 +134,7 @@ class AndroidBackendConnection(
                 }
 
                 val shouldUnbind = synchronized(lock) {
+                    // Ignore late callbacks from attempts that are no longer current.
                     if (inFlight === attempt && serviceConnection === connection) {
                         service = connectedService
                         inFlight = null
@@ -158,6 +182,7 @@ class AndroidBackendConnection(
         return attempt
     }
 
+    /** Actually ask Android to bind to the companion backend service. */
     private fun BindingAttempt.start() {
         try {
             val bound = serviceBinder.bind(intent, connection, flags)
@@ -171,6 +196,7 @@ class AndroidBackendConnection(
         }
     }
 
+    /** Convert a binding failure message into an exception for the waiting coroutine. */
     private fun failBinding(
         attempt: BindingAttempt,
         message: String,
@@ -179,6 +205,7 @@ class AndroidBackendConnection(
         failBinding(attempt, IllegalStateException(message), shouldUnbind)
     }
 
+    /** Fail the attempt, clear shared state, and unbind if Android requires it. */
     private fun failBinding(
         attempt: BindingAttempt,
         error: Throwable,
@@ -201,6 +228,7 @@ class AndroidBackendConnection(
         attempt.deferred.completeExceptionally(error)
     }
 
+    /** Unbind can throw if Android already considers the connection gone. */
     private fun ServiceBinder.unbindSafely(connection: ServiceConnection) {
         runCatching { unbind(connection) }
     }
@@ -210,6 +238,7 @@ class AndroidBackendConnection(
     }
 }
 
+/** State for one bindService attempt. */
 private data class BindingAttempt(
     val intent: Intent,
     val connection: ServiceConnection,

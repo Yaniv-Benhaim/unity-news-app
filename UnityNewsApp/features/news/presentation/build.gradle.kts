@@ -28,6 +28,8 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:data"))
+    implementation(project(":core:ui"))
     implementation(project(":features:news:domain"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.material3)

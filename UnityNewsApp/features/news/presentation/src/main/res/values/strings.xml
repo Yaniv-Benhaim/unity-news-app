@@ -1,0 +1,26 @@
+<resources>
+    <string name="news_screen_title">Unity News</string>
+    <string name="news_screen_subtitle">Backend-driven reader</string>
+    <string name="news_action_refresh">Refresh</string>
+    <string name="news_action_refreshing">Refreshing</string>
+    <string name="news_action_retry">Retry</string>
+    <string name="news_action_retrying">Retrying</string>
+    <string name="news_action_apply_filters">Apply filters</string>
+    <string name="news_action_open_backend_setup">Open backend setup</string>
+
+    <string name="news_error_title">Could not load news</string>
+    <string name="news_empty_title">No articles</string>
+    <string name="news_empty_message">Try a broader title search or select another rating.</string>
+    <string name="news_backend_required_title">Backend required</string>
+    <string name="news_backend_required_checking">Checking the companion backend...</string>
+    <string name="news_backend_required_message">Unity News reads articles from a companion backend app. Install or start the backend, then refresh the feed.</string>
+
+    <string name="news_filters_title">Filters</string>
+    <string name="news_filters_description">Edit your preferences, then apply them as one backend request.</string>
+    <string name="news_filter_text_support">Type a value for this backend filter</string>
+    <string name="news_article_rating">%1$d / 5 rating</string>
+
+    <string name="news_error_unable_to_load_articles">Unable to load articles</string>
+    <string name="news_error_unable_to_refresh_articles">Unable to refresh articles</string>
+    <string name="news_error_install_or_start_backend">Install or start the Unity News backend</string>
+</resources>

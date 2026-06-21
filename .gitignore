@@ -1,8 +1,13 @@
 .DS_Store
+.codex/
 .superpowers/
 .worktrees/
+MyApplication/
 worktrees/
 
 **/.gradle/
 **/build/
 **/local.properties
+**/__pycache__/
+**/*.pyc
+screenshots/

@@ -7,8 +7,20 @@ import androidx.room.Query
 import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * Room DAO for article cache operations.
+ *
+ * The public methods describe feature-level operations. The protected methods
+ * below are lower-level SQL steps used inside transactions.
+ */
 @Dao
 abstract class NewsDao {
+    /**
+     * Replace one cached query atomically.
+     *
+     * Both the article rows and the query mapping are written in one transaction
+     * so the UI never sees a half-updated cache.
+     */
     @Transaction
     open suspend fun replaceCachedQuery(
         criteriaHash: String,
@@ -26,6 +38,12 @@ abstract class NewsDao {
         )
     }
 
+    /**
+     * Mark a cached query as stale after a failed refresh.
+     *
+     * If the query was never cached before, we create an empty stale entry so
+     * the UI can still show a meaningful backend error.
+     */
     @Transaction
     open suspend fun markStale(criteriaHash: String, reason: String) {
         val updatedRows = updateStaleReason(criteriaHash, reason)
@@ -59,9 +77,11 @@ abstract class NewsDao {
     )
     protected abstract suspend fun updateStaleReason(criteriaHash: String, reason: String): Int
 
+    /** Observe the metadata for one filter selection. */
     @Query("SELECT * FROM cached_queries WHERE criteriaHash = :criteriaHash")
     abstract fun observeCachedQuery(criteriaHash: String): Flow<CachedQueryEntity?>
 
+    /** Observe article rows by ID. Ordering is restored in RoomNewsLocalDataSource. */
     @Query("SELECT * FROM articles WHERE id IN (:articleIds)")
     abstract fun observeArticlesByIds(articleIds: List<String>): Flow<List<ArticleEntity>>
 }

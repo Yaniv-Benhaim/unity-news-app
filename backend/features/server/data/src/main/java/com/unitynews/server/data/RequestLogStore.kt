@@ -8,6 +8,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+/**
+ * In-memory request log shown by the backend console.
+ *
+ * Logs are intentionally capped so a long demo session does not grow memory
+ * forever.
+ */
 class RequestLogStore(
     private val maxEntries: Int = 50,
 ) {
@@ -16,6 +22,7 @@ class RequestLogStore(
 
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
 
+    /** Add a timestamped log entry to the top of the list. */
     fun add(message: String) {
         val timestamp = synchronized(timestampFormat) {
             timestampFormat.format(Date())
@@ -25,6 +32,7 @@ class RequestLogStore(
         }
     }
 
+    /** Clear all visible request history. */
     fun clear() {
         _logs.value = emptyList()
     }

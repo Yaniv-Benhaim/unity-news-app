@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">Unity News Backend</string>
+    <string name="backend_notification_content">Backend service is running</string>
+    <string name="backend_notification_action_stop">Stop</string>
+    <string name="backend_notification_channel_name">Unity News backend</string>
+    <string name="backend_error_caller_not_authorized">Caller is not authorized</string>
+    <string name="backend_error_unable_to_load_filters">Unable to load filters</string>
+    <string name="backend_error_scenario_forced_server_error">Scenario forced a server error</string>
+    <string name="backend_error_unable_to_load_status">Unable to load status</string>
+    <string name="backend_error_unable_to_load_articles">Unable to load articles</string>
+    <string name="backend_operator_started_foreground_service">operator started foreground service</string>
+    <string name="backend_operator_stopped_foreground_service">operator stopped foreground service</string>
 </resources>

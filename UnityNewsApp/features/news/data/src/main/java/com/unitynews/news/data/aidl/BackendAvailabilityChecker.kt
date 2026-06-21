@@ -3,15 +3,22 @@ package com.unitynews.news.data.aidl
 import android.content.pm.PackageManager
 import android.os.Build
 
+/** Small testable wrapper around PackageManager. */
 fun interface PackageInspector {
     fun isPackageInstalled(packageName: String): Boolean
 }
 
+/** Reader-side view of whether the backend app is present on the device. */
 enum class BackendAvailability {
     Missing,
     Installed,
 }
 
+/**
+ * Checks if the companion backend package is installed.
+ *
+ * The reader can use this to guide the user to install or open the backend.
+ */
 class BackendAvailabilityChecker(
     private val packageInspector: PackageInspector,
     private val backendPackageName: String = DEFAULT_BACKEND_PACKAGE,
@@ -28,6 +35,7 @@ class BackendAvailabilityChecker(
     }
 }
 
+/** Production PackageInspector backed by Android PackageManager. */
 class AndroidPackageInspector(
     private val packageManager: PackageManager,
 ) : PackageInspector {

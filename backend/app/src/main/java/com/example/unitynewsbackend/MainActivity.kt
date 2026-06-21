@@ -11,9 +11,15 @@ import androidx.compose.runtime.remember
 import androidx.core.content.ContextCompat
 import com.example.unitynewsbackend.service.NewsBackendForegroundService
 import com.example.unitynewsbackend.ui.theme.UnityNewsBackendTheme
-import com.unitynews.server.presentation.BackendConsoleScreen
 import com.unitynews.server.presentation.BackendConsoleViewModel
+import com.unitynews.server.presentation.screen.BackendConsoleScreen
 
+/**
+ * Visible control app for the backend.
+ *
+ * This Activity lets a reviewer start/stop the foreground service, switch
+ * backend scenarios, and inspect recent reader requests.
+ */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,14 +44,19 @@ class MainActivity : ComponentActivity() {
                 BackendConsoleScreen(
                     uiState = uiState,
                     onStartService = {
-                        viewModel.recordServiceAction("started")
+                        viewModel.recordServiceAction(
+                            getString(R.string.backend_operator_started_foreground_service),
+                        )
+                        // A foreground service makes the backend explicit and long-running.
                         ContextCompat.startForegroundService(
                             this,
                             NewsBackendForegroundService.intent(this),
                         )
                     },
                     onStopService = {
-                        viewModel.recordServiceAction("stopped")
+                        viewModel.recordServiceAction(
+                            getString(R.string.backend_operator_stopped_foreground_service),
+                        )
                         stopService(NewsBackendForegroundService.intent(this))
                     },
                     onScenarioSelected = viewModel::setScenario,

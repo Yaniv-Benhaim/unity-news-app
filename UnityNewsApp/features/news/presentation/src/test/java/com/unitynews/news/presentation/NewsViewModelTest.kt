@@ -5,6 +5,11 @@ import com.unitynews.news.domain.model.FilterCriteria
 import com.unitynews.news.domain.model.FilterSpec
 import com.unitynews.news.domain.model.FilterType
 import com.unitynews.news.domain.repository.NewsRepository
+import com.unitynews.news.domain.usecase.GetFilterSpecsUseCase
+import com.unitynews.news.domain.usecase.ObserveArticlesUseCase
+import com.unitynews.news.domain.usecase.RefreshArticlesUseCase
+import com.unitynews.news.presentation.model.NewsTextProvider
+import com.unitynews.news.presentation.model.NewsUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
@@ -41,7 +46,7 @@ class NewsViewModelTest {
             ),
         )
 
-        val viewModel = NewsViewModel(repository)
+        val viewModel = repository.newsViewModel()
         advanceUntilIdle()
 
         val state = viewModel.state.value
@@ -57,14 +62,14 @@ class NewsViewModelTest {
     fun `initialization refreshes articles for first launch`() = runTest {
         val repository = FakeNewsRepository()
 
-        NewsViewModel(repository)
+        repository.newsViewModel()
         advanceUntilIdle()
 
         assertEquals(1, repository.refreshCalls)
     }
 
     @Test
-    fun `known title and rating filter keys update built in criteria fields`() = runTest {
+    fun `title and rating filters update draft criteria as generic filter values`() = runTest {
         val repository = FakeNewsRepository(
             filterSpecsResult = Result.success(
                 listOf(
@@ -73,37 +78,54 @@ class NewsViewModelTest {
                 ),
             ),
         )
-        val viewModel = NewsViewModel(repository)
+        val viewModel = repository.newsViewModel()
         advanceUntilIdle()
 
         viewModel.updateTextFilter(key = "title", value = "unity")
         viewModel.toggleMultiSelectFilter(key = "rating", option = "5", selected = true)
         advanceUntilIdle()
 
-        assertEquals("unity", repository.observedCriteria.last().titleQuery)
-        assertEquals(setOf(5), repository.observedCriteria.last().ratingValues)
-        assertEquals(emptyMap<String, Set<String>>(), repository.observedCriteria.last().dynamicValues)
+        assertEquals(
+            mapOf(
+                "title" to setOf("unity"),
+                "rating" to setOf("5"),
+            ),
+            viewModel.criteria.value.filterValues,
+        )
     }
 
     @Test
-    fun `criteria changes refresh articles for the selected filter`() = runTest {
+    fun `apply filters refreshes articles once with combined title and rating criteria`() = runTest {
         val repository = FakeNewsRepository(
             filterSpecsResult = Result.success(
                 listOf(FilterSpec(key = "rating", label = "Rating", type = FilterType.MultiSelect)),
             ),
         )
-        val viewModel = NewsViewModel(repository)
+        val viewModel = repository.newsViewModel()
         advanceUntilIdle()
 
+        val refreshCallsBeforeEdits = repository.refreshCriteria.size
+        viewModel.updateTextFilter(key = "title", value = "unity")
         viewModel.toggleMultiSelectFilter(key = "rating", option = "1", selected = true)
         advanceUntilIdle()
 
-        assertEquals(2, repository.refreshCriteria.size)
-        assertEquals(setOf(1), repository.refreshCriteria.last().ratingValues)
+        assertEquals(refreshCallsBeforeEdits, repository.refreshCriteria.size)
+
+        viewModel.applyFilters()
+        advanceUntilIdle()
+
+        assertEquals(refreshCallsBeforeEdits + 1, repository.refreshCriteria.size)
+        assertEquals(
+            mapOf(
+                "title" to setOf("unity"),
+                "rating" to setOf("1"),
+            ),
+            repository.refreshCriteria.last().filterValues,
+        )
     }
 
     @Test
-    fun `unknown dynamic filter keys update dynamic criteria values`() = runTest {
+    fun `backend provided filter keys update generic criteria values`() = runTest {
         val repository = FakeNewsRepository(
             filterSpecsResult = Result.success(
                 listOf(
@@ -112,7 +134,7 @@ class NewsViewModelTest {
                 ),
             ),
         )
-        val viewModel = NewsViewModel(repository)
+        val viewModel = repository.newsViewModel()
         advanceUntilIdle()
 
         viewModel.toggleMultiSelectFilter(key = "section", option = "Tech", selected = true)
@@ -124,7 +146,7 @@ class NewsViewModelTest {
                 "section" to setOf("Tech"),
                 "source" to setOf("Wire"),
             ),
-            repository.observedCriteria.last().dynamicValues,
+            viewModel.criteria.value.filterValues,
         )
     }
 
@@ -135,7 +157,7 @@ class NewsViewModelTest {
             articles = MutableStateFlow(cachedArticles),
             refreshFailure = IllegalStateException("backend exploded"),
         )
-        val viewModel = NewsViewModel(repository)
+        val viewModel = repository.newsViewModel()
         advanceUntilIdle()
 
         viewModel.refresh()
@@ -154,19 +176,20 @@ class NewsViewModelTest {
         val recoveredArticle = article(id = "2", title = "Recovered")
         val repository = FakeNewsRepository(
             observeArticlesOverride = { criteria ->
-                if (criteria.titleQuery == "recovered") {
+                if (criteria.filterValues["title"]?.contains("recovered") == true) {
                     flowOf(listOf(recoveredArticle))
                 } else {
                     flow { throw IllegalStateException("observe failed") }
                 }
             },
         )
-        val viewModel = NewsViewModel(repository)
+        val viewModel = repository.newsViewModel()
         advanceUntilIdle()
 
         assertTrue(viewModel.state.value is NewsUiState.Error)
 
         viewModel.updateTextFilter(key = "title", value = "recovered")
+        viewModel.applyFilters()
         advanceUntilIdle()
 
         val state = viewModel.state.value
@@ -188,7 +211,7 @@ class NewsViewModelTest {
             ),
             refreshResult = Result.success(Unit),
         )
-        val viewModel = NewsViewModel(repository)
+        val viewModel = repository.newsViewModel()
         advanceUntilIdle()
 
         val state = viewModel.state.value
@@ -202,7 +225,7 @@ class NewsViewModelTest {
         val repository = FakeNewsRepository(
             articles = MutableStateFlow(listOf(article(id = "1", title = "Cached"))),
         )
-        val viewModel = NewsViewModel(repository)
+        val viewModel = repository.newsViewModel()
         advanceUntilIdle()
 
         viewModel.refresh()
@@ -220,7 +243,7 @@ class NewsViewModelTest {
             articles = MutableStateFlow(listOf(article(id = "1", title = "Cached"))),
             filterSpecDeferredResults = ArrayDeque(listOf(initialFilters, refreshedFilters)),
         )
-        val viewModel = NewsViewModel(repository)
+        val viewModel = repository.newsViewModel()
         advanceUntilIdle()
 
         refreshedFilters.complete(
@@ -245,7 +268,7 @@ class NewsViewModelTest {
             ),
         )
 
-        val viewModel = NewsViewModel(repository)
+        val viewModel = repository.newsViewModel()
         advanceUntilIdle()
 
         val state = viewModel.state.value
@@ -262,7 +285,7 @@ class NewsViewModelTest {
             filterSpecsResult = Result.failure(IllegalStateException("backend missing")),
             refreshDeferredResult = refreshResult,
         )
-        val viewModel = NewsViewModel(repository)
+        val viewModel = repository.newsViewModel()
         advanceUntilIdle()
 
         viewModel.refresh()
@@ -337,4 +360,18 @@ private class FakeNewsRepository(
             filterSpecResults.isNotEmpty() -> filterSpecResults.removeFirst()
             else -> filterSpecsResult
         }
+}
+
+private fun NewsRepository.newsViewModel(): NewsViewModel =
+    NewsViewModel(
+        observeArticles = ObserveArticlesUseCase(this),
+        refreshArticles = RefreshArticlesUseCase(this),
+        getFilterSpecs = GetFilterSpecsUseCase(this),
+        textProvider = FakeNewsTextProvider,
+    )
+
+private object FakeNewsTextProvider : NewsTextProvider {
+    override val unableToLoadArticles = "Unable to load articles"
+    override val unableToRefreshArticles = "Unable to refresh articles"
+    override val installOrStartBackend = "Install or start the Unity News backend"
 }

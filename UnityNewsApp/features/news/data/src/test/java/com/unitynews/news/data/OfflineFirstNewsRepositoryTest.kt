@@ -23,7 +23,7 @@ class OfflineFirstNewsRepositoryTest {
         )
         val local = InMemoryNewsLocalDataSource()
         val repository = OfflineFirstNewsRepository(local, remote)
-        val criteria = FilterCriteria(titleQuery = "unity", ratingValues = setOf(5))
+        val criteria = criteria("title" to setOf("unity"), "rating" to setOf("5"))
 
         val result = repository.refresh(criteria)
 
@@ -56,8 +56,8 @@ class OfflineFirstNewsRepositoryTest {
     @Test
     fun `criteria specific cache does not mix different filter result sets`() = runTest {
         val local = InMemoryNewsLocalDataSource()
-        val unityCriteria = FilterCriteria(titleQuery = "unity", ratingValues = setOf(5))
-        val androidCriteria = FilterCriteria(titleQuery = "android", ratingValues = setOf(4))
+        val unityCriteria = criteria("title" to setOf("unity"), "rating" to setOf("5"))
+        val androidCriteria = criteria("title" to setOf("android"), "rating" to setOf("4"))
         local.replace(unityCriteria, listOf(article(id = "1", title = "Unity", rating = 5)))
         local.replace(androidCriteria, listOf(article(id = "2", title = "Android", rating = 4)))
         val repository = OfflineFirstNewsRepository(
@@ -77,7 +77,7 @@ class OfflineFirstNewsRepositoryTest {
 
     @Test
     fun `mark stale does not delete cached articles`() = runTest {
-        val criteria = FilterCriteria(titleQuery = "cached")
+        val criteria = criteria("title" to setOf("cached"))
         val local = InMemoryNewsLocalDataSource()
         local.replace(criteria, listOf(article(id = "1", title = "Cached", rating = 2)))
 
@@ -95,8 +95,8 @@ class OfflineFirstNewsRepositoryTest {
         val local = InMemoryNewsLocalDataSource()
         val remote = FakeRemoteArticleDataSource(articleResult = Result.success(emptyList()))
         val repository = OfflineFirstNewsRepository(local, remote)
-        val sportsCriteria = FilterCriteria(dynamicValues = mapOf("section" to setOf("sports")))
-        val financeCriteria = FilterCriteria(dynamicValues = mapOf("section" to setOf("finance")))
+        val sportsCriteria = criteria("section" to setOf("sports"))
+        val financeCriteria = criteria("section" to setOf("finance"))
         local.replace(sportsCriteria, listOf(article(id = "1", title = "Sports", rating = 4)))
         local.replace(financeCriteria, listOf(article(id = "2", title = "Finance", rating = 5)))
 
@@ -116,13 +116,13 @@ class OfflineFirstNewsRepositoryTest {
         val remote = FakeRemoteArticleDataSource(articleResult = Result.success(emptyList()))
         val repository = OfflineFirstNewsRepository(local, remote)
         val firstCriteria = FilterCriteria(
-            dynamicValues = linkedMapOf(
+            filterValues = linkedMapOf(
                 "topic" to linkedSetOf("unity", "android"),
                 "region" to linkedSetOf("us", "eu"),
             ),
         )
         val reorderedCriteria = FilterCriteria(
-            dynamicValues = linkedMapOf(
+            filterValues = linkedMapOf(
                 "region" to linkedSetOf("eu", "us"),
                 "topic" to linkedSetOf("android", "unity"),
             ),
@@ -201,7 +201,7 @@ class OfflineFirstNewsRepositoryTest {
     @Test
     fun `refresh rethrows cancellation returned by remote and does not mark stale`() = runTest {
         val expected = CancellationException("remote cancelled")
-        val criteria = FilterCriteria(titleQuery = "cancel")
+        val criteria = criteria("title" to setOf("cancel"))
         val local = InMemoryNewsLocalDataSource()
         val remote = FakeRemoteArticleDataSource(articleResult = Result.failure(expected))
         val repository = OfflineFirstNewsRepository(local, remote)
@@ -229,6 +229,9 @@ class OfflineFirstNewsRepositoryTest {
         placeholderGreen = 2,
         placeholderBlue = 3,
     )
+
+    private fun criteria(vararg values: Pair<String, Set<String>>): FilterCriteria =
+        FilterCriteria(filterValues = mapOf(*values))
 }
 
 private class FakeRemoteArticleDataSource(
@@ -262,12 +265,10 @@ private class InMemoryNewsLocalDataSource : NewsLocalDataSource {
     fun staleReason(criteria: FilterCriteria): String? = cache.value[criteria.cacheKey()]?.staleReason
 
     private fun FilterCriteria.cacheKey(): String {
-        val title = titleQuery?.trim().orEmpty()
-        val ratings = ratingValues.sorted().joinToString(separator = ",")
-        val dynamic = dynamicValues.toSortedMap().entries.joinToString(separator = "|") { (key, values) ->
+        val filters = filterValues.toSortedMap().entries.joinToString(separator = "|") { (key, values) ->
             "$key=${values.sorted().joinToString(separator = ",")}"
         }
-        return "title=$title|ratings=$ratings|dynamic=$dynamic"
+        return "filters=$filters"
     }
 
     private data class CacheEntry(

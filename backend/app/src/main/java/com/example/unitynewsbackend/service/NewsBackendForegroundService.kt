@@ -13,6 +13,12 @@ import com.example.unitynewsbackend.BackendRuntime
 import com.example.unitynewsbackend.MainActivity
 import com.example.unitynewsbackend.R
 
+/**
+ * Foreground service used to keep the backend process visible and running.
+ *
+ * The actual AIDL binder lives in NewsBackendService. This service is for the
+ * Android lifecycle/user-visible notification requirement.
+ */
 class NewsBackendForegroundService : Service() {
 
     override fun onCreate() {
@@ -26,6 +32,7 @@ class NewsBackendForegroundService : Service() {
             return START_NOT_STICKY
         }
 
+        // START_STICKY asks Android to recreate the service after process death.
         startForeground(NOTIFICATION_ID, buildNotification())
         BackendRuntime.setForegroundServiceRunning(true)
         return START_STICKY
@@ -42,12 +49,13 @@ class NewsBackendForegroundService : Service() {
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText("Backend service is running")
+            .setContentText(getString(R.string.backend_notification_content))
             .setOngoing(true)
             .setContentIntent(activityPendingIntent())
-            .addAction(0, "Stop", stopPendingIntent())
+            .addAction(0, getString(R.string.backend_notification_action_stop), stopPendingIntent())
             .build()
 
+    /** Tapping the notification opens the backend console. */
     private fun activityPendingIntent(): PendingIntent =
         PendingIntent.getActivity(
             this,
@@ -56,6 +64,7 @@ class NewsBackendForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
+    /** Stop action lets the user shut down the foreground service from notification shade. */
     private fun stopPendingIntent(): PendingIntent =
         PendingIntent.getService(
             this,
@@ -64,12 +73,13 @@ class NewsBackendForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
+    /** Android 8+ requires a notification channel for foreground services. */
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
 
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Unity News backend",
+            getString(R.string.backend_notification_channel_name),
             NotificationManager.IMPORTANCE_LOW,
         )
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)

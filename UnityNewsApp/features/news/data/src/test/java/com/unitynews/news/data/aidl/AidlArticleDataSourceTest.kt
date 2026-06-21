@@ -27,14 +27,14 @@ class AidlArticleDataSourceTest {
     fun `getArticles sends criteria over aidl and maps returned articles`() = runTest {
         val backend = FakeBackendService(
             articleHandler = { request, callback ->
-                assertEquals("unity", request.titleQuery)
-                assertEquals(listOf(5, 3), request.ratingValues)
                 assertEquals(
                     mapOf(
+                        "title" to listOf("unity"),
+                        "rating" to listOf("5", "3"),
                         "section" to listOf("sports", "finance"),
                         "region" to listOf("emea"),
                     ),
-                    request.dynamicValues,
+                    request.filterValues,
                 )
                 assertTrue(request.requestId.isNotBlank())
                 callback.onSuccess(listOf(articleDto(id = "1", title = "Unity News")))
@@ -44,9 +44,9 @@ class AidlArticleDataSourceTest {
 
         val result = dataSource.getArticles(
             FilterCriteria(
-                titleQuery = "unity",
-                ratingValues = linkedSetOf(5, 3),
-                dynamicValues = linkedMapOf(
+                filterValues = linkedMapOf(
+                    "title" to linkedSetOf("unity"),
+                    "rating" to linkedSetOf("5", "3"),
                     "section" to linkedSetOf("sports", "finance"),
                     "region" to linkedSetOf("emea"),
                 ),

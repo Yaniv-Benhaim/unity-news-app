@@ -3,24 +3,26 @@ package com.unitynews.contract
 import android.os.Parcel
 import android.os.Parcelable
 
+/**
+ * Parcelable request sent from reader app to backend app over AIDL.
+ *
+ * requestId gives each IPC request a stable identifier for logging/debugging.
+ * filterValues carries backend-defined filter keys with their selected values.
+ */
 data class ArticleFilterRequest(
-    val titleQuery: String?,
-    val ratingValues: List<Int>,
     val requestId: String,
-    val dynamicValues: Map<String, List<String>> = emptyMap(),
+    val filterValues: Map<String, List<String>> = emptyMap(),
 ) : Parcelable {
+    /** Read fields in the exact same order used by writeToParcel. */
     constructor(parcel: Parcel) : this(
-        titleQuery = parcel.readString(),
-        ratingValues = parcel.createIntArray()?.toList().orEmpty(),
         requestId = parcel.readString().orEmpty(),
-        dynamicValues = parcel.readDynamicValues(),
+        filterValues = parcel.readFilterValues(),
     )
 
+    /** Write fields in a stable order so both apps decode the same contract. */
     override fun writeToParcel(parcel: Parcel, flags: Int) {
-        parcel.writeString(titleQuery)
-        parcel.writeIntArray(ratingValues.toIntArray())
         parcel.writeString(requestId)
-        parcel.writeDynamicValues(dynamicValues)
+        parcel.writeFilterValues(filterValues)
     }
 
     override fun describeContents(): Int = 0
@@ -33,7 +35,8 @@ data class ArticleFilterRequest(
     }
 }
 
-private fun Parcel.writeDynamicValues(values: Map<String, List<String>>) {
+/** Write filter values in sorted key order for deterministic parcel contents. */
+private fun Parcel.writeFilterValues(values: Map<String, List<String>>) {
     val sortedValues = values.toSortedMap()
     writeInt(sortedValues.size)
     sortedValues.forEach { (key, entryValues) ->
@@ -42,7 +45,8 @@ private fun Parcel.writeDynamicValues(values: Map<String, List<String>>) {
     }
 }
 
-private fun Parcel.readDynamicValues(): Map<String, List<String>> {
+/** Read the filter map written by writeFilterValues. */
+private fun Parcel.readFilterValues(): Map<String, List<String>> {
     val size = readInt()
     if (size <= 0) {
         return emptyMap()

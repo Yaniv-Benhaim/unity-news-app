@@ -1,0 +1,28 @@
+<resources>
+    <string name="backend_console_title">Backend Console</string>
+    <string name="backend_console_subtitle">Service controls, scenario simulation, and IPC request visibility.</string>
+    <string name="backend_console_section_service">Service</string>
+    <string name="backend_console_section_scenarios">Scenarios</string>
+    <string name="backend_console_section_request_logs">Request Logs</string>
+
+    <string name="backend_console_label_foreground">Foreground</string>
+    <string name="backend_console_label_scenario">Scenario</string>
+    <string name="backend_console_label_articles">Articles</string>
+    <string name="backend_console_value_running">Running</string>
+    <string name="backend_console_value_stopped">Stopped</string>
+
+    <string name="backend_console_action_start">Start</string>
+    <string name="backend_console_action_stop">Stop</string>
+    <string name="backend_console_action_refresh">Refresh</string>
+    <string name="backend_console_action_refreshing">Refreshing</string>
+    <string name="backend_console_action_clear">Clear</string>
+
+    <string name="backend_console_request_log_count">%1$d entries</string>
+    <string name="backend_console_no_requests">No requests yet</string>
+
+    <string name="backend_console_scenario_normal">Normal</string>
+    <string name="backend_console_scenario_unauthorized">Unauthorized</string>
+    <string name="backend_console_scenario_server_error">Server error</string>
+    <string name="backend_console_scenario_empty">Empty</string>
+    <string name="backend_console_scenario_slow">Slow</string>
+</resources>

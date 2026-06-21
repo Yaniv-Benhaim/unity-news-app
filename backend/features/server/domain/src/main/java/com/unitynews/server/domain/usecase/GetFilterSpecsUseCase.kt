@@ -4,6 +4,12 @@ import com.unitynews.server.domain.model.Article
 import com.unitynews.server.domain.model.FilterSpec
 import com.unitynews.server.domain.model.FilterType
 
+/**
+ * Builds the filter metadata sent to the reader app.
+ *
+ * Rating options come from the actual article data, so adding articles with new
+ * ratings changes available filters without touching frontend code.
+ */
 class GetFilterSpecsUseCase {
 
     operator fun invoke(articles: List<Article>): List<FilterSpec> {

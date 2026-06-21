@@ -8,6 +8,7 @@ import android.os.RemoteException
 import android.os.SystemClock
 import android.util.Log
 import com.example.unitynewsbackend.BackendRuntime
+import com.example.unitynewsbackend.R
 import com.unitynews.contract.ArticleDto
 import com.unitynews.contract.ArticleFilterRequest
 import com.unitynews.contract.BackendStatusDto
@@ -28,17 +29,31 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/**
+ * Bound AIDL service consumed by the reader app.
+ *
+ * This class is the backend's API surface. It validates callers, applies the
+ * selected demo scenario, filters articles, and returns Parcelable DTOs through
+ * callbacks.
+ */
 class NewsBackendService : Service() {
+    /** IO scope keeps binder callbacks responsive while work runs off the main thread. */
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val binder = object : INewsBackendService.Stub() {
+        /** Contract version checked by the reader before making requests. */
         override fun getApiVersion(): Int = API_VERSION
 
+        /** Return backend-driven filter definitions to the reader app. */
         override fun getFilterSpecs(callback: IFilterSpecsCallback) {
             val callingUid = Binder.getCallingUid()
             serviceScope.launch {
                 if (!validateCaller(callingUid)) {
-                    safeFilterSpecsError(callback, "UNAUTHORIZED", "Caller is not authorized")
+                    safeFilterSpecsError(
+                        callback,
+                        ERROR_CODE_UNAUTHORIZED,
+                        getString(R.string.backend_error_caller_not_authorized),
+                    )
                     return@launch
                 }
 
@@ -51,13 +66,14 @@ class NewsBackendService : Service() {
                     .onFailure { error ->
                         safeFilterSpecsError(
                             callback,
-                            "SERVER_ERROR",
-                            error.message ?: "Unable to load filters",
+                            ERROR_CODE_SERVER_ERROR,
+                            error.message ?: getString(R.string.backend_error_unable_to_load_filters),
                         )
                     }
             }
         }
 
+        /** Return articles for a filter request, applying the currently selected scenario. */
         override fun getArticles(request: ArticleFilterRequest, callback: IArticlesCallback) {
             val callingUid = Binder.getCallingUid()
             val startedAt = SystemClock.elapsedRealtime()
@@ -69,31 +85,32 @@ class NewsBackendService : Service() {
                 if (!validateCaller(callingUid)) {
                     val callbackSent = safeArticleError(
                         callback,
-                        "UNAUTHORIZED",
-                        "Caller is not authorized",
+                        ERROR_CODE_UNAUTHORIZED,
+                        getString(R.string.backend_error_caller_not_authorized),
                     )
                     logArticlesRequest(
                         requestLabel,
                         criteria,
                         scenario,
-                        articleLogResult("UNAUTHORIZED", callbackSent),
+                        articleLogResult(ERROR_CODE_UNAUTHORIZED, callbackSent),
                         startedAt,
                     )
                     return@launch
                 }
 
                 when (scenario) {
+                    // Demo scenarios make error, empty, and slow states easy to review.
                     ServerScenario.Unauthorized -> {
                         val callbackSent = safeArticleError(
                             callback,
-                            "UNAUTHORIZED",
-                            "Caller is not authorized",
+                            ERROR_CODE_UNAUTHORIZED,
+                            getString(R.string.backend_error_caller_not_authorized),
                         )
                         logArticlesRequest(
                             requestLabel,
                             criteria,
                             scenario,
-                            articleLogResult("UNAUTHORIZED", callbackSent),
+                            articleLogResult(ERROR_CODE_UNAUTHORIZED, callbackSent),
                             startedAt,
                         )
                     }
@@ -101,14 +118,14 @@ class NewsBackendService : Service() {
                     ServerScenario.ServerError -> {
                         val callbackSent = safeArticleError(
                             callback,
-                            "SERVER_ERROR",
-                            "Scenario forced a server error",
+                            ERROR_CODE_SERVER_ERROR,
+                            getString(R.string.backend_error_scenario_forced_server_error),
                         )
                         logArticlesRequest(
                             requestLabel,
                             criteria,
                             scenario,
-                            articleLogResult("SERVER_ERROR", callbackSent),
+                            articleLogResult(ERROR_CODE_SERVER_ERROR, callbackSent),
                             startedAt,
                         )
                     }
@@ -136,11 +153,16 @@ class NewsBackendService : Service() {
             }
         }
 
+        /** Return service health/status for admin-style clients. */
         override fun getBackendStatus(callback: IBackendStatusCallback) {
             val callingUid = Binder.getCallingUid()
             serviceScope.launch {
                 if (!validateCaller(callingUid)) {
-                    safeStatusError(callback, "UNAUTHORIZED", "Caller is not authorized")
+                    safeStatusError(
+                        callback,
+                        ERROR_CODE_UNAUTHORIZED,
+                        getString(R.string.backend_error_caller_not_authorized),
+                    )
                     return@launch
                 }
 
@@ -156,14 +178,15 @@ class NewsBackendService : Service() {
                     .onFailure { error ->
                         safeStatusError(
                             callback,
-                            "SERVER_ERROR",
-                            error.message ?: "Unable to load status",
+                            ERROR_CODE_SERVER_ERROR,
+                            error.message ?: getString(R.string.backend_error_unable_to_load_status),
                         )
                     }
             }
         }
     }
 
+    /** Android gives clients this binder when they bind to the service. */
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onDestroy() {
@@ -178,6 +201,7 @@ class NewsBackendService : Service() {
         scenario: ServerScenario,
         startedAt: Long,
     ) {
+        // Repository returns all articles; domain use case applies request criteria.
         resultPreservingCancellation {
             val articles = BackendRuntime.repository.getArticles()
             BackendRuntime.filterArticlesUseCase(articles, criteria).map { it.toDto() }
@@ -193,19 +217,20 @@ class NewsBackendService : Service() {
         }.onFailure { error ->
             val callbackSent = safeArticleError(
                 callback,
-                "SERVER_ERROR",
-                error.message ?: "Unable to load articles",
+                ERROR_CODE_SERVER_ERROR,
+                error.message ?: getString(R.string.backend_error_unable_to_load_articles),
             )
             logArticlesRequest(
                 requestLabel,
                 criteria,
                 scenario,
-                articleLogResult("SERVER_ERROR", callbackSent),
+                articleLogResult(ERROR_CODE_SERVER_ERROR, callbackSent),
                 startedAt,
             )
         }
     }
 
+    /** Write a compact request entry visible in the backend console. */
     private fun logArticlesRequest(
         requestLabel: String,
         criteria: FilterCriteria,
@@ -219,6 +244,7 @@ class NewsBackendService : Service() {
         )
     }
 
+    /** Callback helpers prevent a dead remote process from crashing the service. */
     private fun safeArticleSuccess(callback: IArticlesCallback, articles: List<ArticleDto>): Boolean =
         runCallback("articles success") {
             callback.onSuccess(articles)
@@ -258,6 +284,7 @@ class NewsBackendService : Service() {
             false
         }
 
+    /** Convert exceptions to Result while preserving coroutine cancellation. */
     private suspend fun <T> resultPreservingCancellation(block: suspend () -> T): Result<T> =
         try {
             Result.success(block())
@@ -267,19 +294,21 @@ class NewsBackendService : Service() {
             Result.failure(error)
         }
 
+    /** Add callback delivery state to request logs for easier debugging. */
     private fun articleLogResult(result: String, callbackSent: Boolean): String =
         if (callbackSent) result else "$result callback=REMOTE_EXCEPTION"
 
+    /** Trust same-process calls and signed reader-app calls only. */
     private fun validateCaller(callingUid: Int): Boolean =
         BackendRuntime.callerValidator.validate(callingUid)
 
+    /** Convert the AIDL request DTO into the backend domain filter model. */
     private fun ArticleFilterRequest.toCriteria(): FilterCriteria =
         FilterCriteria(
-            titleQuery = titleQuery,
-            ratingValues = ratingValues.toSet(),
-            dynamicValues = dynamicValues.mapValues { (_, values) -> values.toSet() },
+            filterValues = filterValues.mapValues { (_, values) -> values.toSet() },
         )
 
+    /** Convert a backend domain article to the shared AIDL DTO. */
     private fun Article.toDto(): ArticleDto =
         ArticleDto(
             id = id,
@@ -292,6 +321,7 @@ class NewsBackendService : Service() {
             placeholderBlue = placeholderBlue,
         )
 
+    /** Convert backend filter metadata to the shared AIDL DTO. */
     private fun FilterSpec.toDto(): FilterSpecDto =
         FilterSpecDto(
             key = key,
@@ -300,12 +330,22 @@ class NewsBackendService : Service() {
             options = options,
         )
 
+    /** Keep logs short but still useful for debugging request behavior. */
     private fun FilterCriteria.toLogString(): String =
-        "title=${titleQuery?.takeIf { it.isNotBlank() } ?: "*"},ratings=${ratingValues.sorted().ifEmpty { listOf("*") }}"
+        filterValues
+            .toSortedMap()
+            .takeIf { it.isNotEmpty() }
+            ?.entries
+            ?.joinToString(separator = ";") { (key, values) ->
+                "$key=${values.sorted().ifEmpty { listOf("*") }}"
+            }
+            ?: "*"
 
     private companion object {
         const val TAG = "NewsBackendService"
         const val API_VERSION = 2
+        private const val ERROR_CODE_SERVER_ERROR = "SERVER_ERROR"
+        private const val ERROR_CODE_UNAUTHORIZED = "UNAUTHORIZED"
         const val SLOW_SCENARIO_DELAY_MS = 800L
     }
 }

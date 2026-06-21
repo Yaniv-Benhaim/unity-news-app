@@ -9,12 +9,12 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class ArticleFilterRequestTest {
     @Test
-    fun parcelRoundTripPreservesDynamicValues() {
+    fun parcelRoundTripPreservesFilterValues() {
         val request = ArticleFilterRequest(
-            titleQuery = "unity",
-            ratingValues = listOf(5, 3),
             requestId = "request-1",
-            dynamicValues = mapOf(
+            filterValues = mapOf(
+                "title" to listOf("unity"),
+                "rating" to listOf("5", "3"),
                 "section" to listOf("sports", "finance"),
                 "region" to listOf("eu"),
             ),
@@ -26,9 +26,7 @@ class ArticleFilterRequestTest {
         val decoded = ArticleFilterRequest.CREATOR.createFromParcel(parcel)
         parcel.recycle()
 
-        assertEquals(request.titleQuery, decoded.titleQuery)
-        assertEquals(request.ratingValues, decoded.ratingValues)
         assertEquals(request.requestId, decoded.requestId)
-        assertEquals(request.dynamicValues, decoded.dynamicValues)
+        assertEquals(request.filterValues, decoded.filterValues)
     }
 }

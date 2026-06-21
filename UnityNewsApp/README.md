@@ -30,3 +30,9 @@ If the backend is missing or unavailable, the UI shows a setup screen that opens
 - `features/news/data`: Room cache, AIDL client, repository implementation, contract DTOs.
 - `features/news/presentation`: ViewModel, UI state, filter controls, news screen.
 - `app`: Hilt wiring and the activity shell.
+
+## Company AI Skills
+
+The `company-skills/` folder demonstrates how a company can package repeatable Codex workflows for future developers. These skills cover feature modules, presentation structure, offline-first caching, backend filter contracts, and Android security review.
+
+In a real organization this folder would be published from an internal skill registry. It is included here so reviewers can inspect the operating model directly.

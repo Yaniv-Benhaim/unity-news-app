@@ -4,6 +4,12 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Process
 
+/**
+ * Validates callers before serving AIDL requests.
+ *
+ * The backend trusts its own process and the expected reader package only when
+ * Android reports that both apps are signed with the same certificate.
+ */
 class CallerValidator(
     private val backendUid: Int = Process.myUid(),
     private val allowedPackageName: String = DEFAULT_ALLOWED_PACKAGE_NAME,
@@ -19,6 +25,7 @@ class CallerValidator(
         packageInspector = AndroidCallerPackageInspector(context.applicationContext),
     )
 
+    /** Return true when the calling UID is allowed to use the backend API. */
     fun validate(callingUid: Int): Boolean {
         if (callingUid == backendUid) return true
 
@@ -32,16 +39,19 @@ class CallerValidator(
     }
 }
 
+/** Small wrapper around PackageManager so authorization logic can be tested. */
 interface CallerPackageInspector {
     fun packagesForUid(uid: Int): List<String>
     fun hasSameSignature(packageName: String): Boolean
 }
 
+/** Default test-safe inspector: no external caller is trusted. */
 private object NoExternalCallerPackageInspector : CallerPackageInspector {
     override fun packagesForUid(uid: Int): List<String> = emptyList()
     override fun hasSameSignature(packageName: String): Boolean = false
 }
 
+/** Production inspector backed by Android PackageManager. */
 private class AndroidCallerPackageInspector(
     private val context: Context,
 ) : CallerPackageInspector {

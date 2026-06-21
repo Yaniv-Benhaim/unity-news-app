@@ -3,6 +3,7 @@ package com.unitynews.server.presentation
 import com.unitynews.server.data.RequestLogStore
 import com.unitynews.server.data.ScenarioController
 import com.unitynews.server.domain.model.ServerScenario
+import com.unitynews.server.presentation.model.BackendConsoleUiState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,12 +15,19 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * State holder for the visible backend console.
+ *
+ * This class is not an Android ViewModel because it is manually created by the
+ * backend Activity from the shared BackendRuntime objects.
+ */
 class BackendConsoleViewModel(
     private val scenarioController: ScenarioController,
     private val requestLogStore: RequestLogStore,
     private val serviceRunning: StateFlow<Boolean>,
     private val articleCountProvider: suspend () -> Int,
 ) : AutoCloseable {
+    /** Manual coroutine scope because this object is manually closed by the Activity. */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val articleCount = MutableStateFlow(0)
     private val isRefreshing = MutableStateFlow(false)
@@ -29,6 +37,7 @@ class BackendConsoleViewModel(
 
     init {
         scope.launch {
+            // Merge runtime state into one UI state object for Compose.
             combine(
                 serviceRunning,
                 scenarioController.scenario,
@@ -50,14 +59,17 @@ class BackendConsoleViewModel(
         refreshStatus()
     }
 
+    /** Change how the AIDL service will respond to future article requests. */
     fun setScenario(scenario: ServerScenario) {
         scenarioController.setScenario(scenario)
     }
 
+    /** Remove all visible request log entries. */
     fun clearLogs() {
         requestLogStore.clear()
     }
 
+    /** Refresh console-only status such as current article count. */
     fun refreshStatus() {
         scope.launch {
             isRefreshing.value = true
@@ -77,10 +89,12 @@ class BackendConsoleViewModel(
         }
     }
 
-    fun recordServiceAction(action: String) {
-        requestLogStore.add("operator $action foreground service")
+    /** Record operator actions so service start/stop is visible in the console log. */
+    fun recordServiceAction(message: String) {
+        requestLogStore.add(message)
     }
 
+    /** Cancel work when the Activity composition leaves. */
     override fun close() {
         scope.cancel()
     }

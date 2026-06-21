@@ -35,7 +35,7 @@ class RoomNewsLocalDataSourceTest {
 
     @Test
     fun `replace stores JSON ids transactionally and preserves cached article order`() = runTest {
-        val criteria = FilterCriteria(titleQuery = "ordered")
+        val criteria = criteria("title" to setOf("ordered"))
         local.replace(
             criteria,
             listOf(
@@ -52,8 +52,8 @@ class RoomNewsLocalDataSourceTest {
 
     @Test
     fun `active observer sees shared article updates from another criteria refresh`() = runTest {
-        val criteriaA = FilterCriteria(titleQuery = "a")
-        val criteriaB = FilterCriteria(titleQuery = "b")
+        val criteriaA = criteria("title" to setOf("a"))
+        val criteriaB = criteria("title" to setOf("b"))
         local.replace(criteriaA, listOf(article(id = "1", title = "Old shared")))
 
         local.observe(criteriaA).test {
@@ -68,7 +68,7 @@ class RoomNewsLocalDataSourceTest {
 
     @Test
     fun `active observer sees article table updates when cached query ids are unchanged`() = runTest {
-        val criteria = FilterCriteria(titleQuery = "same ids")
+        val criteria = criteria("title" to setOf("same ids"))
         local.replace(criteria, listOf(article(id = "1", title = "Old title")))
 
         local.observe(criteria).test {
@@ -87,8 +87,8 @@ class RoomNewsLocalDataSourceTest {
 
     @Test
     fun `criteria cache isolation includes custom dynamic filters`() = runTest {
-        val sportsCriteria = FilterCriteria(dynamicValues = mapOf("section" to setOf("sports")))
-        val financeCriteria = FilterCriteria(dynamicValues = mapOf("section" to setOf("finance")))
+        val sportsCriteria = criteria("section" to setOf("sports"))
+        val financeCriteria = criteria("section" to setOf("finance"))
         local.replace(sportsCriteria, listOf(article(id = "1", title = "Sports")))
         local.replace(financeCriteria, listOf(article(id = "2", title = "Finance")))
 
@@ -104,7 +104,7 @@ class RoomNewsLocalDataSourceTest {
 
     @Test
     fun `mark stale preserves cached query rows and article rows`() = runTest {
-        val criteria = FilterCriteria(titleQuery = "cached")
+        val criteria = criteria("title" to setOf("cached"))
         local.replace(criteria, listOf(article(id = "1", title = "Cached")))
 
         local.markStale(criteria, "offline")
@@ -128,4 +128,7 @@ class RoomNewsLocalDataSourceTest {
         placeholderGreen = 2,
         placeholderBlue = 3,
     )
+
+    private fun criteria(vararg values: Pair<String, Set<String>>): FilterCriteria =
+        FilterCriteria(filterValues = mapOf(*values))
 }

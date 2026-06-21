@@ -11,7 +11,6 @@ composeBom = "2026.02.01"
 hilt = "2.59.2"
 ksp = "2.3.6"
 room = "2.8.4"
-coil = "2.7.0"
 serializationJson = "1.11.0"
 coroutines = "1.11.0"
 turbine = "1.2.1"
@@ -36,7 +35,6 @@ hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.r
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
-coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJson" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }

@@ -18,9 +18,16 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
+/**
+ * Remote data source that talks to the companion backend app through AIDL.
+ *
+ * This class is the only place in the reader feature that knows about Android
+ * IPC DTOs and callbacks. Everything above it works with domain models.
+ */
 class AidlArticleDataSource(
     private val backend: suspend () -> INewsBackendService,
 ) : RemoteArticleDataSource {
+    /** Fetch articles from the backend service and convert DTOs to domain models. */
     override suspend fun getArticles(criteria: FilterCriteria): Result<List<Article>> =
         resultPreservingCancellation {
             val service = backend()
@@ -28,6 +35,7 @@ class AidlArticleDataSource(
             service.awaitArticles(criteria.toRequest())
         }
 
+    /** Fetch backend-defined filters so the UI can render dynamic filter controls. */
     override suspend fun getFilterSpecs(): Result<List<FilterSpec>> =
         resultPreservingCancellation {
             val service = backend()
@@ -41,12 +49,14 @@ class AidlArticleDataSource(
         suspendCancellableCoroutine { continuation ->
             val completed = AtomicBoolean(false)
 
+            // AIDL callbacks may arrive later or more than once. Complete the coroutine once.
             fun complete(result: Result<List<Article>>) {
                 if (completed.compareAndSet(false, true) && continuation.isActive) {
                     continuation.resume(result)
                 }
             }
 
+            // Convert the callback-style AIDL API into a suspend function.
             val callback = object : IArticlesCallback.Stub() {
                 override fun onSuccess(articles: List<ArticleDto>?) {
                     complete(runCatching { articles.orEmpty().map { it.toArticle() } })
@@ -74,12 +84,14 @@ class AidlArticleDataSource(
         suspendCancellableCoroutine { continuation ->
             val completed = AtomicBoolean(false)
 
+            // Same one-shot guard as articles: only the first callback wins.
             fun complete(result: Result<List<FilterSpec>>) {
                 if (completed.compareAndSet(false, true) && continuation.isActive) {
                     continuation.resume(result)
                 }
             }
 
+            // The backend sends transport DTOs; the data source maps them to domain filters.
             val callback = object : IFilterSpecsCallback.Stub() {
                 override fun onSuccess(specs: List<FilterSpecDto>?) {
                     complete(runCatching { specs.orEmpty().map { it.toFilterSpec() } })
@@ -103,6 +115,7 @@ class AidlArticleDataSource(
             }
         }
 
+    /** Fail fast if the installed backend app speaks an incompatible contract. */
     private fun INewsBackendService.requireSupportedApiVersion() {
         val backendApiVersion = apiVersion
         if (backendApiVersion != SUPPORTED_API_VERSION) {
@@ -110,6 +123,7 @@ class AidlArticleDataSource(
         }
     }
 
+    /** Convert transport errors to Result while still respecting coroutine cancellation. */
     private suspend fun <T> resultPreservingCancellation(block: suspend () -> Result<T>): Result<T> =
         try {
             block()
@@ -124,14 +138,14 @@ class AidlArticleDataSource(
     }
 }
 
+/** Build the AIDL request from the domain filter object. */
 internal fun FilterCriteria.toRequest(): ArticleFilterRequest =
     ArticleFilterRequest(
-        titleQuery = titleQuery,
-        ratingValues = ratingValues.toList(),
         requestId = UUID.randomUUID().toString(),
-        dynamicValues = dynamicValues.mapValues { (_, values) -> values.toList() },
+        filterValues = filterValues.mapValues { (_, values) -> values.toList() },
     )
 
+/** Convert one backend article DTO into the frontend domain model. */
 private fun ArticleDto.toArticle(): Article =
     Article(
         id = id,
@@ -144,6 +158,7 @@ private fun ArticleDto.toArticle(): Article =
         placeholderBlue = placeholderBlue,
     )
 
+/** Convert one backend filter DTO into the frontend domain model. */
 private fun FilterSpecDto.toFilterSpec(): FilterSpec =
     FilterSpec(
         key = key,
@@ -152,6 +167,7 @@ private fun FilterSpecDto.toFilterSpec(): FilterSpec =
         options = options,
     )
 
+/** Keep type parsing forgiving so backend spelling changes do not crash the app. */
 private fun String.toFilterType(): FilterType =
     when (trim().replace("-", "_").lowercase()) {
         "text" -> FilterType.Text
@@ -159,6 +175,7 @@ private fun String.toFilterType(): FilterType =
         else -> FilterType.Unsupported
     }
 
+/** Exception type used when the backend reports an AIDL-level failure. */
 private class AidlBackendException(
     code: String?,
     message: String?,
